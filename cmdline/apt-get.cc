@@ -3310,7 +3310,6 @@ int main(int argc,const char *argv[])					/*{{{*/
       _error->DumpErrors();
       return 100;
    }
-   //_config->Dump();
    // See if the help should be shown
    if (_config->FindB("help") == true ||
        _config->FindB("version") == true ||
