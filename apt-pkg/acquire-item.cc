@@ -727,7 +727,6 @@ void pkgAcqIndexDiffs::Done(string Message,unsigned long Size,string Md5Hash,	/*
 
       // rred excepts the patch as $FinalFile.ed
       Rename(DestFile,FinalFile+".ed");
-      std::clog << "    Sending to rred method FinalFile: " << FinalFile << std::endl;
       if(Debug)
 	 std::clog << "Sending to rred method: " << FinalFile << std::endl;
 
