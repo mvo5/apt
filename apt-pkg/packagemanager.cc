@@ -80,11 +80,13 @@ bool pkgPackageManager::GetArchives(pkgAcquire *Owner,pkgSourceList *Sources,
       // Skip already processed packages
       if (List->IsNow(Pkg) == false)
 	 continue;
-      
-      //new pkgAcqArchive(Owner,Sources,Recs,Cache[Pkg].InstVerIter(Cache),
-      //		FileNames[Pkg->ID]);
-      new pkgAcqDebdelta(Owner,Sources,Recs,Cache[Pkg].InstVerIter(Cache),
+
+      if (_config->FindB("Acquire::debdelta", true) == true)
+	new pkgAcqDebdelta(Owner,Sources,Recs,Cache[Pkg].InstVerIter(Cache),
 			FileNames[Pkg->ID]);
+      else
+	new pkgAcqArchive(Owner,Sources,Recs,Cache[Pkg].InstVerIter(Cache),
+			  FileNames[Pkg->ID]);
    }
 
    return true;
