@@ -183,7 +183,7 @@ void pkgAcquire::Item::ReportMirrorFailure(string FailCode)
    }
 }
 
-void pkgAcquire::Item::SkipNotSources(pkgCache::VerFileIterator &Vf)
+void pkgAcqIntermediate::SkipNotSources(pkgCache::VerFileIterator &Vf)
 {
    for (; Vf.end() == false; Vf++)
    {
@@ -193,7 +193,7 @@ void pkgAcquire::Item::SkipNotSources(pkgCache::VerFileIterator &Vf)
    }
 }
 
-void pkgAcquire::Item::SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted)
+void pkgAcqIntermediate::SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted)
 {
    for (pkgCache::VerFileIterator i = Version.FileList(); i.end() == false; i++)
    {
@@ -213,7 +213,7 @@ void pkgAcquire::Item::SwitchTrustOnly(const pkgCache::VerIterator &Version, pkg
    }
 }
 
-void pkgAcquire::Item::CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash)
+void pkgAcqIntermediate::CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash)
 {
    string const ForceHash = _config->Find("Acquire::ForceHash");
    if (ForceHash.empty() == false)
@@ -1681,9 +1681,10 @@ void pkgAcqMetaClearSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf) /*
 pkgAcqArchive::pkgAcqArchive(pkgAcquire *Owner,pkgSourceList *Sources,
 			     pkgRecords *Recs,pkgCache::VerIterator const &Version,
 			     string &StoreFilename) :
-               Item(Owner), Version(Version), Sources(Sources), Recs(Recs), 
+               /*Item(Owner), Version(Version), Sources(Sources), Recs(Recs), 
                StoreFilename(StoreFilename), Vf(Version.FileList()), 
-	       Trusted(false)
+	       Trusted(false) */
+	       pkgAcqIntermediate(Owner, Version, Sources, Recs, StoreFilename, false)
 {
    Retries = _config->FindI("Acquire::Retries",0);
 
@@ -1739,19 +1740,18 @@ pkgAcqArchive::pkgAcqArchive(pkgAcquire *Owner,pkgSourceList *Sources,
 /* This queues the next available file version for download. It checks if
    the archive is already available in the cache and stashs the MD5 for
    checking later. */
-bool pkgAcqArchive::QueueNext()
-{
-   string const ForceHash = _config->Find("Acquire::ForceHash");
+bool pkgAcqIntermediate::QueueNextHelper()
+{   
    for (; Vf.end() == false; Vf++)
    {
       // Ignore not source sources
       if ((Vf.File()->Flags & pkgCache::Flag::NotSource) != 0)
 	 continue;
-
+      
       // Try to cross match against the source list
       pkgIndexFile *Index;
       if (Sources->FindIndex(Vf.File(),Index) == false)
-	    continue;
+	 continue;
       
       // only try to get a trusted package from another source if that source
       // is also trusted
@@ -1767,15 +1767,9 @@ bool pkgAcqArchive::QueueNext()
       string PkgFile = Parse.FileName();
       if (PkgFile.empty() == true)
 	 return _error->Error(_("The package index files are corrupted. No Filename: "
-			      "field for package %s."),
+				"field for package %s."),
 			      Version.ParentPkg().Name());
 
-      Desc.URI = Index->ArchiveURI(PkgFile);
-      Desc.Description = Index->ArchiveInfo(Version);
-      Desc.Owner = this;
-      Desc.ShortDesc = Version.ParentPkg().Name();
-
-      // See if we already have the file. (Legacy filenames)
       FileSize = Version->Size;
       string FinalFile = _config->FindDir("Dir::Cache::Archives") + flNotDir(PkgFile);
       struct stat Buf;
@@ -1795,51 +1789,24 @@ bool pkgAcqArchive::QueueNext()
 	    an old style mismatched arch */
 	 unlink(FinalFile.c_str());
       }
-
-      // Check it again using the new style output filenames
-      FinalFile = _config->FindDir("Dir::Cache::Archives") + flNotDir(StoreFilename);
-      if (stat(FinalFile.c_str(),&Buf) == 0)
-      {
-	 // Make sure the size matches
-	 if ((unsigned)Buf.st_size == Version->Size)
-	 {
-	    Complete = true;
-	    Local = true;
-	    Status = StatDone;
-	    StoreFilename = DestFile = FinalFile;
-	    return true;
-	 }
-	 
-	 /* Hmm, we have a file and its size does not match, this shouldnt
-	    happen.. */
-	 unlink(FinalFile.c_str());
-      }
-
-      DestFile = _config->FindDir("Dir::Cache::Archives") + "partial/" + flNotDir(StoreFilename);
-      
-      // Check the destination file
-      if (stat(DestFile.c_str(),&Buf) == 0)
-      {
-	 // Hmm, the partial file is too big, erase it
-	 if ((unsigned)Buf.st_size > Version->Size)
-	    unlink(DestFile.c_str());
-	 else
-	    PartialSize = Buf.st_size;
-      }
-      
-      // Create the item
+      int respond = CreateItemDesc(Index, PkgFile);
+      if (respond == 1)
+	 return true;
+      else if (respond == 2)
+	 return false;
       Local = false;
-      Desc.URI = Index->ArchiveURI(PkgFile);
-      Desc.Description = Index->ArchiveInfo(Version);
-      Desc.Owner = this;
-      Desc.ShortDesc = Version.ParentPkg().Name();
       QueueURI(Desc);
-
       Vf++;
       return true;
    }
    return false;
-}   
+}
+
+bool pkgAcqArchive::QueueNext()
+{
+   return QueueNextHelper();
+}
+
 									/*}}}*/
 // AcqArchive::Done - Finished fetching					/*{{{*/
 // ---------------------------------------------------------------------
@@ -1949,6 +1916,47 @@ void pkgAcqArchive::Finished()
        Complete == true)
       return;
    StoreFilename = string();
+}
+
+int pkgAcqArchive::CreateItemDesc(pkgIndexFile *Index, string &PkgFile)
+{
+	// Check it again using the new style output filenames
+      string FinalFile = _config->FindDir("Dir::Cache::Archives") + flNotDir(StoreFilename);
+      struct stat Buf;
+      if (stat(FinalFile.c_str(),&Buf) == 0)
+      {
+	 // Make sure the size matches
+	 if ((unsigned)Buf.st_size == Version->Size)
+	 {
+	    Complete = true;
+	    Local = true;
+	    Status = StatDone;
+	    StoreFilename = DestFile = FinalFile;
+	    return 1;
+	 }
+	 
+	 /* Hmm, we have a file and its size does not match, this shouldnt
+	    happen.. */
+	 unlink(FinalFile.c_str());
+      }
+
+      DestFile = _config->FindDir("Dir::Cache::Archives") + "partial/" + flNotDir(StoreFilename);
+      
+      // Check the destination file
+      if (stat(DestFile.c_str(),&Buf) == 0)
+      {
+	 // Hmm, the partial file is too big, erase it
+	 if ((unsigned)Buf.st_size > Version->Size)
+	    unlink(DestFile.c_str());
+	 else
+	    PartialSize = Buf.st_size;
+      }
+      // Create the item
+      Desc.URI = Index->ArchiveURI(PkgFile);
+      Desc.Description = Index->ArchiveInfo(Version);
+      Desc.Owner = this;
+      Desc.ShortDesc = Version.ParentPkg().Name();
+      return 0;
 }
 									/*}}}*/
 // AcqFile::pkgAcqFile - Constructor					/*{{{*/
@@ -2087,9 +2095,10 @@ string pkgAcqFile::Custom600Headers()
 pkgAcqDebdelta::pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
 			       pkgRecords *Recs,pkgCache::VerIterator const &Version,
 			       string &StoreFilename) :
-   Item(Owner), Version(Version), Sources(Sources), Recs(Recs), 
+   /*Item(Owner), Version(Version), Sources(Sources), Recs(Recs), 
    StoreFilename(StoreFilename), Vf(Version.FileList()), 
-   Trusted(false)
+   Trusted(false) */
+   pkgAcqIntermediate(Owner, Version, Sources, Recs, StoreFilename, false)
 {
    if (Version.Arch() == 0)
    {
@@ -2159,96 +2168,7 @@ pkgAcqDebdelta::pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
 
 bool pkgAcqDebdelta::QueueNext()
 {   
-   for (; Vf.end() == false; Vf++)
-   {
-      // Ignore not source sources
-      if ((Vf.File()->Flags & pkgCache::Flag::NotSource) != 0)
-	 continue;
-
-      // Try to cross match against the source list
-      pkgIndexFile *Index;
-      if (Sources->FindIndex(Vf.File(),Index) == false)
-	 continue;
-
-      // only try to get a trusted package from another source if that source
-      // is also trusted
-      if(Trusted && !Index->IsTrusted()) 
-	 continue;
-      
-      // Grab the text package record
-      pkgRecords::Parser &Parse = Recs->Lookup(Vf);
-      if (_error->PendingError() == true)
-	 return false;
-      
-      CheckHashes(Parse, ExpectedHash);
-      string PkgFile = Parse.FileName();
-      if (PkgFile.empty() == true)
-	 return _error->Error(_("The package index files are corrupted. No Filename: "
-				"field for package %s."),
-			      Version.ParentPkg().Name());
-      // See if we already have the deb
-      FileSize = Version->Size;
-      string FinalFile = _config->FindDir("Dir::Cache::Archives") + flNotDir(PkgFile);
-      struct stat Buf;
-      if (stat(FinalFile.c_str(),&Buf) == 0)
-      {
-	 if (Debug)
-	    std::cerr << "[Debdelta] File already exists. " << FinalFile << std::endl;
-	 // TODO: check if this ok. Make sure the size matches
-	 if ((unsigned)Buf.st_size == Version->Size)
-	 {
-	    Complete = true;
-	    Local = true;
-	    Status = StatDone;
-            DebdeltaStatus = Completed;
-	    StoreFilename = DestFile = FinalFile;
-	    return true;
-	 }
-	 /* Hmm, we have a file and its size does not match, this means it is
-	    an old style mismatched arch */
-	 unlink(FinalFile.c_str());
-      }
-
-      // Create the item
-      Local = false;
-      // See if we already have the debdelta in the partial dir.
-      if (FileExists(DestFile))
-      {
-	 // TODO: verify the sum/size of it.
-	 if (Debug)
-	    std::cerr << "[Debdelta] File already exists. " << DestFile << std::endl;
-	 Desc.URI = "debdelta:" + DestFile;
-	 Mode = "debdelta";
-	 DebdeltaStatus = Patching;
-	 Local = true;
-      }
-      else
-      {
-	 Desc.URI = flNotFile(Index->ArchiveURI(PkgFile)) + DebdeltaName;
-	 if (ReplaceURI() == false)
-         { 
-             Complete = true;
-	     Status = StatDone;
-             DebdeltaStatus = Completed;
-	     StoreFilename = DestFile = "";
-             return false;
-         }
-      }
-      Desc.Description = Desc.URI; // "[Debdelta] " + Index->ArchiveInfo(Version);
-      Desc.Owner = this;
-      Desc.ShortDesc = DebdeltaName; // "[Debdelta] " + string(Version.ParentPkg().Name());
-      if (Debug)
-      {
-	 std::cerr << "[Debdelta] pkgAcqDebdelta::QueueNext()" << std::endl;
-	 std::cerr << "    DestFile     : " << DestFile << std::endl;
-	 std::cerr << "    Desc.URI     : " << Desc.URI << std::endl;
-	 std::cerr << "    StoreFileName: " << StoreFilename << std::endl;
-      }
-      Vf++;
-      QueueURI(Desc);
-      return true;
-   }
-   return false;
+   return QueueNextHelper();
 }
 
 void pkgAcqDebdelta::Failed(string Message,pkgAcquire::MethodConfig *Cnf)
@@ -2337,8 +2257,8 @@ void pkgAcqDebdelta::Finished()
 
 bool pkgAcqDebdelta::ReplaceURI()
 {
-	// if we cant find a replace URI, just queue the deb instead. remove setting the rep rules from other places.
-    const Configuration::Item* item = _config->Tree("Aquire::Debdelta::Replace-Rule");
+   // if we cant find a replace URI, just queue the deb instead. remove setting the rep rules from other places.
+   const Configuration::Item* item = _config->Tree("Aquire::Debdelta::Replace-Rule");
    for (item = item->Child; item != 0; item = item->Next)
    {
       size_t pos = 0;
@@ -2356,8 +2276,46 @@ bool pkgAcqDebdelta::ReplaceURI()
    }
     // no replacement rule found for this URI. Therefore, queue a reagular deb for downloading.
     if (Debug)
-        std::cerr << "[Debdelta] No replacement rule => " << Desc.URI << std::endl;   
+       std::cerr << "[Debdelta] No replacement rule => " << Desc.URI << std::endl;   
    return false;
+}
+
+int pkgAcqDebdelta::CreateItemDesc(pkgIndexFile *Index, string &PkgFile)
+{
+   if (FileExists(DestFile))
+   {
+      // TODO: verify the sum/size of it.
+      if (Debug)
+	 std::cerr << "[Debdelta] File already exists. " << DestFile << std::endl;
+      Desc.URI = "debdelta:" + DestFile;
+      Mode = "debdelta";
+      DebdeltaStatus = Patching;
+      Local = true;
+   }
+   else
+   {
+      Desc.URI = flNotFile(Index->ArchiveURI(PkgFile)) + DebdeltaName;
+      if (ReplaceURI() == false)
+      { 
+	 Local = false;
+	 Complete = true;
+	 Status = StatDone;
+	 StoreFilename = DestFile = "";
+	 return 2;
+      }
+   }
+   if (Debug)
+   {
+      std::cerr << "[Debdelta] pkgAcqDebdelta::QueueNext()" << std::endl;
+      std::cerr << "    DestFile     : " << DestFile << std::endl;
+      std::cerr << "    Desc.URI     : " << Desc.URI << std::endl;
+      std::cerr << "    StoreFileName: " << StoreFilename << std::endl;
+   }
+   // Create the item
+   Desc.Description = Desc.URI; // "[Debdelta] " + Index->ArchiveInfo(Version);
+   Desc.Owner = this;
+   Desc.ShortDesc = DebdeltaName; // "[Debdelta] " + string(Version.ParentPkg().Name());
+   return 0;
 }
 
 bool IndexTarget::IsOptional() const {

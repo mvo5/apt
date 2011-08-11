@@ -254,9 +254,6 @@ class pkgAcquire::Item : public WeakPointable
     *  \param FailCode A short failure string that is send
     */
    void ReportMirrorFailure(string FailCode);
-   virtual void SkipNotSources(pkgCache::VerFileIterator &Vf);
-   virtual void SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted);
-   virtual void CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash);
 
    /** \brief Initialize an item.
     *
@@ -866,18 +863,14 @@ public:
 		const vector<struct IndexTarget*>* IndexTargets,
 		indexRecords* MetaIndexParser);
 };
-									/*}}}*/
-/** \brief An item that is responsible for fetching a package file.	{{{
- *
- *  If the package file already exists in the cache, nothing will be
- *  done.
- */
-class pkgAcqArchive : public pkgAcquire::Item
+
+class pkgAcqIntermediate : public pkgAcquire::Item
 {
    protected:
+	
    /** \brief The package version being fetched. */
    pkgCache::VerIterator Version;
-
+   
    /** \brief The fetch command that is currently being processed. */
    pkgAcquire::ItemDesc Desc;
 
@@ -914,6 +907,32 @@ class pkgAcqArchive : public pkgAcquire::Item
     */
    bool Trusted; 
 
+   public:
+   
+   bool QueueNextHelper();
+   virtual void SkipNotSources(pkgCache::VerFileIterator &Vf);
+   virtual void SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted);
+   virtual void CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash);
+   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile) {return 0;}
+   
+   pkgAcqIntermediate(pkgAcquire *Owner, pkgCache::VerIterator const &Version, 
+		      pkgSourceList *Sources, pkgRecords *Recs,
+		      string &StoreFilename, bool Trusted) :
+      Item(Owner), Version(Version), Sources(Sources), 
+      Recs(Recs), StoreFilename(StoreFilename),
+      Vf(Version.FileList()), Trusted(Trusted) {}
+};
+
+									/*}}}*/
+/** \brief An item that is responsible for fetching a package file.	{{{
+ *
+ *  If the package file already exists in the cache, nothing will be
+ *  done.
+ */
+class pkgAcqArchive : public pkgAcqIntermediate // pkgAcquire::Item
+{
+   protected:
+
    /** \brief Queue up the next available file for this version. */
    bool QueueNext();
    
@@ -927,6 +946,7 @@ class pkgAcqArchive : public pkgAcquire::Item
    virtual void Finished();
    virtual string HashSum() {return ExpectedHash.toStr(); };
    virtual bool IsTrusted();
+   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
    
    /** \brief Create a new pkgAcqArchive.
     *
@@ -1026,53 +1046,16 @@ class pkgAcqFile : public pkgAcquire::Item
  *  If the package file already exists in the cache, nothing will be
  *  done
  */
-class pkgAcqDebdelta : public pkgAcquire::Item
+class pkgAcqDebdelta : public pkgAcqIntermediate //pkgAcquire::Item
 {
    protected:
+   
+   /** \brief The name of the debdelta file. */
    string DebdeltaName;
-   /** \brief The package version being fetched. */
-   pkgCache::VerIterator Version;
-
-   /** \brief The fetch command that is currently being processed. */
-   pkgAcquire::ItemDesc Desc;
-
-   /** \brief The list of sources from which to pick archives to
-    *  download this package from.
-    */
-   pkgSourceList *Sources;
-
-   /** \brief A package records object, used to look up the file
-    *  corresponding to each version of the package.
-    */
-   pkgRecords *Recs;
-
-   /** \brief The hashsum of this package. */
-   HashString ExpectedHash;
-
-   /** \brief A location in which the actual filename of the package
-    *  should be stored.
-    */
-   string &StoreFilename;
-
-   /** \brief The next file for this version to try to download. */
-   pkgCache::VerFileIterator Vf;
-
-   /** \brief How many (more) times to try to find a new source from
-    *  which to download this package version if it fails.
-    *
-    *  Set from Acquire::Retries.
-    */
-   unsigned int Retries;
-
-   /** \brief \b true if this version file is being downloaded from a
-    *  trusted source.
-    */
-   bool Trusted; 
-
-   /**
-    * \brief used to debug the class
-    */
+   
+   /** \brief used to debug the class */
    bool Debug;
+   
    /** \brief Queue up the next available file for this version. */
    bool QueueNext();
    
@@ -1087,6 +1070,8 @@ class pkgAcqDebdelta : public pkgAcquire::Item
    virtual string HashSum() {return ExpectedHash.toStr(); };
    virtual bool IsTrusted() {return Trusted;};
    virtual bool ReplaceURI();
+   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
+   
    /** \brief Create a new pkgAcqArchive.
     *
     *  \param Owner The pkgAcquire object with which this item is
