@@ -182,6 +182,60 @@ void pkgAcquire::Item::ReportMirrorFailure(string FailCode)
 		      _config->Find("Methods::Mirror::ProblemReporting").c_str());
    }
 }
+
+void pkgAcquire::Item::SkipNotSources(pkgCache::VerFileIterator &Vf)
+{
+   for (; Vf.end() == false; Vf++)
+   {
+      if ((Vf.File()->Flags & pkgCache::Flag::NotSource) != 0)
+	 continue;
+      break;
+   }
+}
+
+void pkgAcquire::Item::SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted)
+{
+   for (pkgCache::VerFileIterator i = Version.FileList(); i.end() == false; i++)
+   {
+      pkgIndexFile *Index;
+      if (Sources->FindIndex(i.File(),Index) == false)
+         continue;
+      if (_config->FindB("Debug::pkgAcquire::Auth", false))
+      {
+         std::cerr << "Checking index: " << Index->Describe()
+                   << "(Trusted=" << Index->IsTrusted() << ")\n";
+      }
+      if (Index->IsTrusted())
+      {
+         Trusted = true;
+	 break;
+      }
+   }
+}
+
+void pkgAcquire::Item::CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash)
+{
+   string const ForceHash = _config->Find("Acquire::ForceHash");
+   if (ForceHash.empty() == false)
+   {	
+      if(stringcasecmp(ForceHash, "sha256") == 0)
+	 ExpectedHash = HashString("SHA256", Parse.SHA256Hash());
+      else if (stringcasecmp(ForceHash, "sha1") == 0)
+	 ExpectedHash = HashString("SHA1", Parse.SHA1Hash());
+      else
+	 ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
+   }
+   else
+   {
+      string Hash;
+      if ((Hash = Parse.SHA256Hash()).empty() == false)
+	 ExpectedHash = HashString("SHA256", Hash);
+      else if ((Hash = Parse.SHA1Hash()).empty() == false)
+	 ExpectedHash = HashString("SHA1", Hash);
+      else
+	 ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
+   }
+}
 									/*}}}*/
 // AcqSubIndex::AcqSubIndex - Constructor				/*{{{*/
 // ---------------------------------------------------------------------
@@ -727,7 +781,6 @@ void pkgAcqIndexDiffs::Done(string Message,unsigned long Size,string Md5Hash,	/*
 
       // rred excepts the patch as $FinalFile.ed
       Rename(DestFile,FinalFile+".ed");
-      std::clog << "    Sending to rred method FinalFile: " << FinalFile << std::endl;
       if(Debug)
 	 std::clog << "Sending to rred method: " << FinalFile << std::endl;
 
@@ -1647,12 +1700,7 @@ pkgAcqArchive::pkgAcqArchive(pkgAcquire *Owner,pkgSourceList *Sources,
       assumption here that all the available sources for this version share
       the same extension.. */
    // Skip not source sources, they do not have file fields.
-   for (; Vf.end() == false; Vf++)
-   {
-      if ((Vf.File()->Flags & pkgCache::Flag::NotSource) != 0)
-	 continue;
-      break;
-   }
+   SkipNotSources(Vf);
    
    // Does not really matter here.. we are going to fail out below
    if (Vf.end() != true)
@@ -1671,21 +1719,7 @@ pkgAcqArchive::pkgAcqArchive(pkgAcquire *Owner,pkgSourceList *Sources,
 
    // check if we have one trusted source for the package. if so, switch
    // to "TrustedOnly" mode
-   for (pkgCache::VerFileIterator i = Version.FileList(); i.end() == false; i++)
-   {
-      pkgIndexFile *Index;
-      if (Sources->FindIndex(i.File(),Index) == false)
-         continue;
-      if (_config->FindB("Debug::pkgAcquire::Auth", false))
-      {
-         std::cerr << "Checking index: " << Index->Describe()
-                   << "(Trusted=" << Index->IsTrusted() << ")\n";
-      }
-      if (Index->IsTrusted()) {
-         Trusted = true;
-	 break;
-      }
-   }
+   SwitchTrustOnly(Version, Sources, Trusted);
 
    // "allow-unauthenticated" restores apts old fetching behaviour
    // that means that e.g. unauthenticated file:// uris are higher
@@ -1729,26 +1763,8 @@ bool pkgAcqArchive::QueueNext()
       if (_error->PendingError() == true)
 	 return false;
       
+      CheckHashes(Parse, ExpectedHash);
       string PkgFile = Parse.FileName();
-      if (ForceHash.empty() == false)
-      {
-	 if(stringcasecmp(ForceHash, "sha256") == 0)
-	    ExpectedHash = HashString("SHA256", Parse.SHA256Hash());
-	 else if (stringcasecmp(ForceHash, "sha1") == 0)
-	    ExpectedHash = HashString("SHA1", Parse.SHA1Hash());
-	 else
-	    ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
-      }
-      else
-      {
-	 string Hash;
-	 if ((Hash = Parse.SHA256Hash()).empty() == false)
-	    ExpectedHash = HashString("SHA256", Hash);
-	 else if ((Hash = Parse.SHA1Hash()).empty() == false)
-	    ExpectedHash = HashString("SHA1", Hash);
-	 else
-	    ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
-      }
       if (PkgFile.empty() == true)
 	 return _error->Error(_("The package index files are corrupted. No Filename: "
 			      "field for package %s."),
@@ -2075,12 +2091,6 @@ pkgAcqDebdelta::pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
    StoreFilename(StoreFilename), Vf(Version.FileList()), 
    Trusted(false)
 {
-   DebdeltaName = string(Version.ParentPkg().Name()) + "_"
-      + string(Version.ParentPkg().CurVersion()) + "_"
-      + string(Version.ParentPkg().CandVersion()) + "_"
-      + string(Version.Arch()) + ".debdelta";
-   Retries = _config->FindI("Acquire::Retries",0);
-   Debug = false;
    if (Version.Arch() == 0)
    {
       _error->Error(_("I wasn't able to locate a file for the %s package. "
@@ -2089,49 +2099,31 @@ pkgAcqDebdelta::pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
 		    Version.ParentPkg().Name());
       return;
    }
-   
+   DebdeltaName = string(Version.ParentPkg().Name()) + "_"
+      + string(Version.ParentPkg().CurVersion()) + "_"
+      + string(Version.ParentPkg().CandVersion()) + "_"
+      + string(Version.Arch()) + ".debdelta";
+   Retries = _config->FindI("Acquire::Retries",0);
+   Debug = true;
    /* We need to find a filename to determine the extension. We make the
       assumption here that all the available sources for this version share
       the same extension.. */
    // Skip not source sources, they do not have file fields.
-   for (; Vf.end() == false; Vf++)
-   {
-      if ((Vf.File()->Flags & pkgCache::Flag::NotSource) != 0)
-	 continue;
-      break;
-   }
-   
+   SkipNotSources(Vf);
    // Does not really matter here.. we are going to fail out below
    if (Vf.end() != true)
-   {     
-      // If this fails to get a file name we will bomb out below.
-      pkgRecords::Parser &Parse = Recs->Lookup(Vf);
-      if (_error->PendingError() == true)
+   {
+    //pkgRecords::Parser &Parse = Recs->Lookup(Vf);
+    if (_error->PendingError() == true)
 	 return;
             
       DebdeltaName = StoreFilename = QuoteString(DebdeltaName, ":");
       DestFile = _config->FindDir("Dir::Cache::Archives") + "partial/" + flNotDir(StoreFilename);
-   }
+       }
 
    // check if we have one trusted source for the package. if so, switch
    // to "TrustedOnly" mode
-   for (pkgCache::VerFileIterator i = Version.FileList(); i.end() == false; i++)
-   {
-      pkgIndexFile *Index;
-      if (Sources->FindIndex(i.File(),Index) == false)
-         continue;
-      if (_config->FindB("Debug::pkgAcquire::Auth", false))
-      {
-         std::cerr << "Checking index: " << Index->Describe()
-                   << "(Trusted=" << Index->IsTrusted() << ")\n";
-      }
-      if (Index->IsTrusted())
-      {
-         Trusted = true;
-	 break;
-      }
-   }
-
+   SwitchTrustOnly(Version, Sources, Trusted);
    // "allow-unauthenticated" restores apts old fetching behaviour
    // that means that e.g. unauthenticated file:// uris are higher
    // priority than authenticated http:// uris
@@ -2166,9 +2158,7 @@ pkgAcqDebdelta::pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
 }
 
 bool pkgAcqDebdelta::QueueNext()
-{
-   string const ForceHash = _config->Find("Acquire::ForceHash");
-   
+{   
    for (; Vf.end() == false; Vf++)
    {
       // Ignore not source sources
@@ -2190,27 +2180,8 @@ bool pkgAcqDebdelta::QueueNext()
       if (_error->PendingError() == true)
 	 return false;
       
+      CheckHashes(Parse, ExpectedHash);
       string PkgFile = Parse.FileName();
-      //std::cerr << "    PkgFile:" << PkgFile << std::endl;
-      if (ForceHash.empty() == false)
-      {
-	 if(stringcasecmp(ForceHash, "sha256") == 0)
-	    ExpectedHash = HashString("SHA256", Parse.SHA256Hash());
-	 else if (stringcasecmp(ForceHash, "sha1") == 0)
-	    ExpectedHash = HashString("SHA1", Parse.SHA1Hash());
-	 else
-	    ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
-      }
-      else
-      {
-	 string Hash;
-	 if ((Hash = Parse.SHA256Hash()).empty() == false)
-	    ExpectedHash = HashString("SHA256", Hash);
-	 else if ((Hash = Parse.SHA1Hash()).empty() == false)
-	    ExpectedHash = HashString("SHA1", Hash);
-	 else
-	    ExpectedHash = HashString("MD5Sum", Parse.MD5Hash());
-      }
       if (PkgFile.empty() == true)
 	 return _error->Error(_("The package index files are corrupted. No Filename: "
 				"field for package %s."),
@@ -2286,23 +2257,20 @@ void pkgAcqDebdelta::Failed(string Message,pkgAcquire::MethodConfig *Cnf)
    if (DebdeltaStatus == Fetching)
       FileStatus = "fetch " + Desc.URI;
    else if (DebdeltaStatus == Patching)
-   {
       FileStatus = "patch " + DestFile;
-      std::cerr << "Failed to " << FileStatus << "." << std::endl;
-   }
    if (Debug)
    {
+   	  std::cerr << "Failed to " << FileStatus << "." << std::endl;
       std::cerr << "[Debdelta] Message:\n=====================\n" << Message
 		<< "\n=====================" << std::endl;
    }
    //std::cerr << "Queuing the regular deb for downloading..." << std::endl;
    // download the regular deb if debdelta failed to download or the patching failed.
-   Complete = true;                      // false;
-   Status =  pkgAcquire::Item::StatDone; // StatError;
+   Complete = true;
+   Status =  pkgAcquire::Item::StatDone;
    DebdeltaStatus = FetchingFailure;
-   //Item::Failed(Message, Cnf);
    Dequeue();
-   if (DebdeltaStatus == Patching) // then remove the debdelta file
+   if (DebdeltaStatus == Patching)
       unlink(DestFile.c_str());
    new pkgAcqArchive(Owner, Sources, Recs, Version, StoreFilename);
 }
@@ -2310,11 +2278,17 @@ void pkgAcqDebdelta::Failed(string Message,pkgAcquire::MethodConfig *Cnf)
 void pkgAcqDebdelta::Done(string Message,unsigned long Size,string Hash,
 			  pkgAcquire::MethodConfig *Cnf)
 {
-   // TODO: there must be two stages within this method.
+   // TODO: there are two stages within this method.
    //       one for downloading debdelta. another for verifying the resulting .deb
-   if (Debug) std::cerr << "\n\n[Debdelta] pkgAcqDebdelta::Done() state: " << DebdeltaStatus << std::endl;
-   // Grab the output filename
+   if (Debug)
+      std::cerr << "\n\n[Debdelta] pkgAcqDebdelta::Done() state: " << DebdeltaStatus << std::endl;
    string FileName = LookupTag(Message,"Filename");
+   if (FileName.empty() == true)
+   {
+      Status = StatError;
+      ErrorText = "[Debdelta] Method gave a blank filename";
+      return;
+   }
    if (Debug)
    {
       std::cerr << "    StoreFileName: " << StoreFilename 
@@ -2324,29 +2298,8 @@ void pkgAcqDebdelta::Done(string Message,unsigned long Size,string Hash,
    }
    if (DebdeltaStatus == Patching)
    {
-      if (Debug) std::cerr << "[Debdelta] Patching Done. Verifying "<< FileName << "..." << std::endl;
-      // check the hash/size of the patched deb. TODO: Is this handled by debpatch internally?
-      /*
-      if (ExpectedHash.toStr() != Hash)
-      {
-	 Status = StatError;
-	 ErrorText = _("[Debdelta] Hash Sum mismatch");
-	 // if(FileExists(DestFile))
-	 //   if (!Local)
-	 //      Rename(DestFile, DestFile + ".FAILED");
-	 std::cerr << "[Debdelta] Hash Sum mismatch" << std::endl;
-	 std::cerr << "     expected: " << ExpectedHash.toStr() << std::endl;
-	 std::cerr << "     hash    : " << Hash << std::endl;
-	 // return; // TODO: UNCOMMENT
-      }
-      // Check the size
-      if (Size != Version->Size)
-      {
-	 Status = StatError;
-	 ErrorText = _("[Debdelta] Size mismatch");
-	 std::cerr << "[Debdelta] Size mismatch" << std::endl;
-	 //return; // TODO: UNCOMMEnT
-      } */
+      if (Debug)
+         std::cerr << "[Debdelta] Patching Done. Verifying " << FileName << "..." << std::endl;
       DebdeltaStatus = Completed;
       Complete = true;
       Status = StatDone;
@@ -2356,13 +2309,7 @@ void pkgAcqDebdelta::Done(string Message,unsigned long Size,string Hash,
       return;
    }
    // TODO: Check the hash/size of the downloaded debdelta.
-   //std::cerr << "[Debdelta] Verifying " << DestFile << std::endl;
-   if (FileName.empty() == true)
-   {
-      Status = StatError;
-      ErrorText = "[Debdelta] Method gave a blank filename";
-      return;
-   }
+   
    if (FileName != DestFile) // this is set in the file/http methods
    {
       // file => FileName != DestFile (i.e. FileName is the local file)
@@ -2409,8 +2356,7 @@ bool pkgAcqDebdelta::ReplaceURI()
    }
     // no replacement rule found for this URI. Therefore, queue a reagular deb for downloading.
     if (Debug)
-        std::cerr << "[Debdelta] No replacement rule => " << Desc.URI << std::endl;
-    
+        std::cerr << "[Debdelta] No replacement rule => " << Desc.URI << std::endl;   
    return false;
 }
 

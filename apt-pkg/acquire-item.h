@@ -254,7 +254,9 @@ class pkgAcquire::Item : public WeakPointable
     *  \param FailCode A short failure string that is send
     */
    void ReportMirrorFailure(string FailCode);
-
+   virtual void SkipNotSources(pkgCache::VerFileIterator &Vf);
+   virtual void SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted);
+   virtual void CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash);
 
    /** \brief Initialize an item.
     *
