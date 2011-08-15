@@ -909,11 +909,18 @@ class pkgAcqIntermediate : public pkgAcquire::Item
 
    public:
    
+   enum QueuingState
+   {
+      QueueThis,
+      FileAlreadyExists,
+      DontQueueThis
+   } QueuingStatus;
+   
    bool QueueNextHelper();
    virtual void SkipNotSources(pkgCache::VerFileIterator &Vf);
    virtual void SwitchTrustOnly(const pkgCache::VerIterator &Version, pkgSourceList *Sources, bool &Trusted);
    virtual void CheckHashes(pkgRecords::Parser &Parse, HashString &ExpectedHash);
-   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile) {return 0;}
+   virtual QueuingState CreateItemDesc(pkgIndexFile *Index, string &PkgFile) {return QueueThis;}
    
    pkgAcqIntermediate(pkgAcquire *Owner, pkgCache::VerIterator const &Version, 
 		      pkgSourceList *Sources, pkgRecords *Recs,
@@ -946,7 +953,7 @@ class pkgAcqArchive : public pkgAcqIntermediate // pkgAcquire::Item
    virtual void Finished();
    virtual string HashSum() {return ExpectedHash.toStr(); };
    virtual bool IsTrusted();
-   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
+   virtual pkgAcqIntermediate::QueuingState CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
    
    /** \brief Create a new pkgAcqArchive.
     *
@@ -1070,7 +1077,7 @@ class pkgAcqDebdelta : public pkgAcqIntermediate //pkgAcquire::Item
    virtual string HashSum() {return ExpectedHash.toStr(); };
    virtual bool IsTrusted() {return Trusted;};
    virtual bool ReplaceURI();
-   virtual int CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
+   virtual pkgAcqIntermediate::QueuingState CreateItemDesc(pkgIndexFile *Index, string &PkgFile);
    
    /** \brief Create a new pkgAcqArchive.
     *
@@ -1091,8 +1098,8 @@ class pkgAcqDebdelta : public pkgAcqIntermediate //pkgAcquire::Item
     *  qualified filename once the download finishes.
     */
    pkgAcqDebdelta(pkgAcquire *Owner,pkgSourceList *Sources,
-		 pkgRecords *Recs,pkgCache::VerIterator const &Version,
-		 string &StoreFilename);
+		  pkgRecords *Recs,pkgCache::VerIterator const &Version,
+		  string &StoreFilename);
    enum DebdeltaState
    {
       Fetching,
