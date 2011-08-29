@@ -403,7 +403,6 @@ pkgAcqDiffIndex::pkgAcqDiffIndex(pkgAcquire *Owner,
    : Item(Owner), RealURI(URI), ExpectedHash(ExpectedHash),
      Description(URIDesc)
 {
-   
    Debug = _config->FindB("Debug::pkgAcquire::Diffs",false);
 
    Desc.Description = URIDesc + "/DiffIndex";
@@ -881,7 +880,7 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc, string const &S
    Desc.Description = URIDesc;
    Desc.Owner = this;
    Desc.ShortDesc = ShortDesc;
-
+   std::cerr << "pkgAcqIndex::Init(): Desc.URI: " << Desc.URI << std::endl;
    QueueURI(Desc);
 }
 									/*}}}*/

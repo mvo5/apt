@@ -183,10 +183,14 @@ vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
 	     a != ArchEntries.end(); ++a) {
 		if (a->first == "source")
 			continue;
+                
 		for (vector <const debSectionEntry *>::const_iterator I = a->second.begin();
 		     I != a->second.end(); ++I) {
 			IndexTarget * Target = new IndexTarget();
-			Target->ShortDesc = "Packages";
+      if ((*I)->LineType == pkgSourceList::Debdelta)
+         Target->ShortDesc = "Debdeltas";
+      else
+         Target->ShortDesc = "Packages";
 			Target->MetaKey = IndexURISuffix(Target->ShortDesc.c_str(), (*I)->Section, a->first);
 			Target->URI = IndexURI(Target->ShortDesc.c_str(), (*I)->Section, a->first);
 			Target->Description = Info (Target->ShortDesc.c_str(), (*I)->Section, a->first);
@@ -237,11 +241,11 @@ bool debReleaseIndex::GetIndexes(pkgAcquire *Owner, bool const &GetAll) const
    if (GetAll) {
       vector <struct IndexTarget *> *targets = ComputeIndexTargets();
       for (vector <struct IndexTarget*>::const_iterator Target = targets->begin(); Target != targets->end(); Target++) {
-	 new pkgAcqIndex(Owner, (*Target)->URI, (*Target)->Description,
+          new pkgAcqIndex(Owner, (*Target)->URI, (*Target)->Description,
 			 (*Target)->ShortDesc, HashString());
       }
    }
-
+   
 	new pkgAcqMetaClearSig(Owner, MetaIndexURI("InRelease"),
 		MetaIndexInfo("InRelease"), "InRelease",
 		MetaIndexURI("Release"), MetaIndexInfo("Release"), "Release",
@@ -314,7 +318,7 @@ vector <pkgIndexFile *> *debReleaseIndex::GetIndexFiles() {
 void debReleaseIndex::PushSectionEntry(vector<string> const &Archs, const debSectionEntry *Entry) {
 	for (vector<string>::const_iterator a = Archs.begin();
 	     a != Archs.end(); ++a)
-		ArchEntries[*a].push_back(new debSectionEntry(Entry->Section, Entry->IsSrc));
+      ArchEntries[*a].push_back(new debSectionEntry(Entry->Section, Entry->LineType));
 	delete Entry;
 }
 
@@ -323,8 +327,8 @@ void debReleaseIndex::PushSectionEntry(string const &Arch, const debSectionEntry
 }
 
 void debReleaseIndex::PushSectionEntry(const debSectionEntry *Entry) {
-	if (Entry->IsSrc == true)
-		PushSectionEntry("source", Entry);
+   if (Entry->LineType == pkgSourceList::DebSrc)
+      PushSectionEntry("source", Entry);
 	else {
 		for (map<string, vector<const debSectionEntry *> >::iterator a = ArchEntries.begin();
 		     a != ArchEntries.end(); ++a) {
@@ -334,7 +338,7 @@ void debReleaseIndex::PushSectionEntry(const debSectionEntry *Entry) {
 }
 
 debReleaseIndex::debSectionEntry::debSectionEntry (string const &Section,
-		bool const &IsSrc): Section(Section), IsSrc(IsSrc)
+		pkgSourceList::DebSLType const &LineType): Section(Section), LineType(LineType)
 {}
 
 class debSLTypeDebian : public pkgSourceList::Type
@@ -343,18 +347,27 @@ class debSLTypeDebian : public pkgSourceList::Type
 
    bool CreateItemInternal(vector<metaIndex *> &List, string const &URI,
 			   string const &Dist, string const &Section,
-			   bool const &IsSrc, map<string, string> const &Options) const
+			   pkgSourceList::DebSLType LineType, map<string, string> const &Options) const
    {
+        
       map<string, string>::const_iterator const arch = Options.find("arch");
       vector<string> const Archs =
 		(arch != Options.end()) ? VectorizeString(arch->second, ',') :
 				APT::Configuration::getArchitectures();
 
+      std::cerr << "debSLTypeDebian::CreateItemInternal() "
+                 << "    URI: " << URI
+                 << "    Dist: " << Dist
+                 << "    Section: " << Section
+                 << "    LineType: " << LineType 
+                 << "    Archs: " << Archs[0]
+                 << "    IsDebdelta: " << (LineType == pkgSourceList::Debdelta) << std::endl;
+      
       for (vector<metaIndex *>::const_iterator I = List.begin();
 	   I != List.end(); I++)
       {
-	 // We only worry about debian entries here
-	 if (strcmp((*I)->GetType(), "deb") != 0)
+	 // We only worry about debian and debdelta entries here
+	 if (strcmp((*I)->GetType(), "deb") != 0 && strcmp((*I)->GetType(), "debdelta") != 0)
 	    continue;
 
 	 debReleaseIndex *Deb = (debReleaseIndex *) (*I);
@@ -363,14 +376,14 @@ class debSLTypeDebian : public pkgSourceList::Type
 	    corresponds to. */
 	 if (Deb->GetURI() == URI && Deb->GetDist() == Dist)
 	 {
-	    if (IsSrc == true)
-	       Deb->PushSectionEntry("source", new debReleaseIndex::debSectionEntry(Section, IsSrc));
+	    if (LineType == pkgSourceList::DebSrc)
+	       Deb->PushSectionEntry("source", new debReleaseIndex::debSectionEntry(Section, LineType));
 	    else
 	    {
 	       if (Dist[Dist.size() - 1] == '/')
-		  Deb->PushSectionEntry("any", new debReleaseIndex::debSectionEntry(Section, IsSrc));
+		  Deb->PushSectionEntry("any", new debReleaseIndex::debSectionEntry(Section, LineType));
 	       else
-		  Deb->PushSectionEntry(Archs, new debReleaseIndex::debSectionEntry(Section, IsSrc));
+		  Deb->PushSectionEntry(Archs, new debReleaseIndex::debSectionEntry(Section, LineType));
 	    }
 	    return true;
 	 }
@@ -378,14 +391,14 @@ class debSLTypeDebian : public pkgSourceList::Type
       // No currently created Release file indexes this entry, so we create a new one.
       // XXX determine whether this release is trusted or not
       debReleaseIndex *Deb = new debReleaseIndex(URI, Dist);
-      if (IsSrc == true)
-	 Deb->PushSectionEntry ("source", new debReleaseIndex::debSectionEntry(Section, IsSrc));
+      if (LineType == pkgSourceList::DebSrc)
+	 Deb->PushSectionEntry ("source", new debReleaseIndex::debSectionEntry(Section, LineType));
       else
       {
 	 if (Dist[Dist.size() - 1] == '/')
-	    Deb->PushSectionEntry ("any", new debReleaseIndex::debSectionEntry(Section, IsSrc));
+	    Deb->PushSectionEntry ("any", new debReleaseIndex::debSectionEntry(Section, LineType));
 	 else
-	    Deb->PushSectionEntry (Archs, new debReleaseIndex::debSectionEntry(Section, IsSrc));
+	    Deb->PushSectionEntry (Archs, new debReleaseIndex::debSectionEntry(Section, LineType));
       }
       List.push_back(Deb);
       return true;
@@ -400,7 +413,7 @@ class debSLTypeDeb : public debSLTypeDebian
 		   string const &Dist, string const &Section,
 		   std::map<string, string> const &Options) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, false, Options);
+      return CreateItemInternal(List, URI, Dist, Section, pkgSourceList::Deb, Options);
    }
 
    debSLTypeDeb()
@@ -418,7 +431,7 @@ class debSLTypeDebSrc : public debSLTypeDebian
 		   string const &Dist, string const &Section,
 		   std::map<string, string> const &Options) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, true, Options);
+      return CreateItemInternal(List, URI, Dist, Section, pkgSourceList::DebSrc, Options);
    }
    
    debSLTypeDebSrc()
@@ -436,7 +449,7 @@ public:
 		   string const &Dist, string const &Section,
 		   std::map<string, string> const &Options) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, false, Options);
+      return CreateItemInternal(List, URI, Dist, Section, pkgSourceList::Debdelta, Options);
    }
    
    debSLTypeDebdelta()

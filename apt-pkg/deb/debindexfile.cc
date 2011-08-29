@@ -244,6 +244,7 @@ string debPackagesIndex::Info(const char *Type) const
 inline string debPackagesIndex::IndexFile(const char *Type) const
 {
    string s =_config->FindDir("Dir::State::lists") + URItoFileName(IndexURI(Type));
+   std::cerr << "debPackagesIndex::IndexFile(): " << s << std::endl;
    string sgzip = s + ".gz";
    if (!FileExists(s) && FileExists(sgzip))
        return sgzip;
@@ -265,6 +266,7 @@ string debPackagesIndex::IndexURI(const char *Type) const
       "/binary-" + Architecture + '/';
    
    Res += Type;
+   std::cerr << "debPackagesIndex::IndexURI(): " << Res << std::endl;
    return Res;
 }
 									/*}}}*/
@@ -400,6 +402,7 @@ inline string debTranslationsIndex::IndexFile(const char *Type) const
    else
        return s;
 }
+
 string debTranslationsIndex::IndexURI(const char *Type) const
 {
    string Res;
