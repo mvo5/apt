@@ -23,9 +23,17 @@
 pkgRecords::pkgRecords(pkgCache &Cache) : Cache(Cache), 
   Files(Cache.HeaderP->PackageFileCount)
 {
+   
    for (pkgCache::PkgFileIterator I = Cache.FileBegin();
         I.end() == false; I++)
    {
+       std::cerr << "pkgRecords::pkgRecords()\n"
+               << "\tI.Architecture(): " << I.Architecture()
+               << "\n\tI.Archive(): " << I.Archive()
+               << "\n\tI.FileName(): " << I.FileName()
+               << "\n\tI.Index(): " << I.Index()
+               << "\n\tI.IndexType(): " << I.IndexType()
+               << std::endl;
       const pkgIndexFile::Type *Type = pkgIndexFile::Type::GetType(I.IndexType());
       if (Type == 0)
       {

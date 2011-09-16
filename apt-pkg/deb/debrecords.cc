@@ -177,3 +177,21 @@ void debRecordParser::GetRec(const char *&Start,const char *&Stop)
    Section.GetSection(Start,Stop);
 }
 									/*}}}*/
+// debRecordParser::SourceVersion - Returns the source version of a debdelta 
+/*{{{*/
+// ---------------------------------------------------------------------
+/* */
+string debRecordParser::SourceVersion()
+{
+    return Section.FindS("SourceVersion");
+}
+                                                                        /*}}}*/
+// debRecordParser::TargetVersion - Returns the target version of a debdelta
+/*{{{*/
+// ---------------------------------------------------------------------
+/* */
+string debRecordParser::TargetVersion()
+{
+    return Section.FindS("TargetVersion");
+}
+                                                                        /*}}}*/

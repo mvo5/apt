@@ -1069,7 +1069,6 @@ bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask = true,
         Essential = !ShowEssential(c1out,Cache);
    Fail |= Essential;
    Stats(c1out,Cache);
-
    // Sanity check
    if (Cache->BrokenCount() != 0)
    {

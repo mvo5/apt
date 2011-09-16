@@ -299,7 +299,12 @@ vector <pkgIndexFile *> *debReleaseIndex::GetIndexFiles() {
 			continue;
 		for (vector<debSectionEntry const*>::const_iterator I = a->second.begin();
 		     I != a->second.end(); I++) {
-			Indexes->push_back(new debPackagesIndex (URI, Dist, (*I)->Section, IsTrusted(), a->first));
+                    string type;
+                    if ((*I)->LineType == pkgSourceList::Deb)
+                        type = "Packages";
+                    else if ((*I)->LineType == pkgSourceList::Debdelta)
+                        type = "Debdeltas";
+                    Indexes->push_back(new debPackagesIndex (URI, Dist, (*I)->Section, IsTrusted(), a->first, type));
 			sections[(*I)->Section].insert(lang.begin(), lang.end());
 		}
 	}

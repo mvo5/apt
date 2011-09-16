@@ -173,8 +173,9 @@ unsigned long debSourcesIndex::Size() const
 // ---------------------------------------------------------------------
 /* */
 debPackagesIndex::debPackagesIndex(string const &URI, string const &Dist, string const &Section,
-					bool const &Trusted, string const &Arch) :
-                  pkgIndexFile(Trusted), URI(URI), Dist(Dist), Section(Section), Architecture(Arch)
+					bool const &Trusted, string const &Arch, string const &DebOrDebdelta) :
+                  pkgIndexFile(Trusted), URI(URI), Dist(Dist), Section(Section),
+        Architecture(Arch), DebOrDebdelta(DebOrDebdelta)
 {
 	if (Architecture == "native")
 		Architecture = _config->Find("APT::Architecture");
@@ -211,10 +212,10 @@ string debPackagesIndex::Describe(bool Short) const
 {   
    char S[300];
    if (Short == true)
-      snprintf(S,sizeof(S),"%s",Info("Packages").c_str());
+      snprintf(S,sizeof(S),"%s",Info(DebOrDebdelta.c_str()).c_str()); // "Packages"
    else
-      snprintf(S,sizeof(S),"%s (%s)",Info("Packages").c_str(),
-	       IndexFile("Packages").c_str());
+      snprintf(S,sizeof(S),"%s (%s)",Info(DebOrDebdelta.c_str()).c_str(),
+	       IndexFile(DebOrDebdelta.c_str()).c_str()); //"Packages" "Packages"
    return S;
 }
 									/*}}}*/
@@ -251,6 +252,7 @@ inline string debPackagesIndex::IndexFile(const char *Type) const
    else
        return s;
 }
+
 string debPackagesIndex::IndexURI(const char *Type) const
 {
    string Res;
@@ -275,7 +277,7 @@ string debPackagesIndex::IndexURI(const char *Type) const
 /* */
 bool debPackagesIndex::Exists() const
 {
-   return FileExists(IndexFile("Packages"));
+   return FileExists(IndexFile(DebOrDebdelta.c_str())); //"Packages"
 }
 									/*}}}*/
 // PackagesIndex::Size - Return the size of the index			/*{{{*/
@@ -288,7 +290,7 @@ unsigned long debPackagesIndex::Size() const
    /* we need to ignore errors here; if the lists are absent, just return 0 */
    _error->PushToStack();
 
-   FileFd f = FileFd (IndexFile("Packages"), FileFd::ReadOnlyGzip);
+   FileFd f = FileFd (IndexFile(DebOrDebdelta.c_str()), FileFd::ReadOnlyGzip); //"Packages"
    if (!f.Failed())
       size = f.Size();
 
@@ -304,14 +306,14 @@ unsigned long debPackagesIndex::Size() const
 /* */
 bool debPackagesIndex::Merge(pkgCacheGenerator &Gen,OpProgress *Prog) const
 {
-   string PackageFile = IndexFile("Packages");
+   string PackageFile = IndexFile(DebOrDebdelta.c_str()); //"Packages"
    FileFd Pkg(PackageFile,FileFd::ReadOnlyGzip);
    debListParser Parser(&Pkg, Architecture);
 
    if (_error->PendingError() == true)
       return _error->Error("Problem opening %s",PackageFile.c_str());
    if (Prog != NULL)
-      Prog->SubProgress(0,Info("Packages"));
+      Prog->SubProgress(0,Info(DebOrDebdelta.c_str())); //"Packages"
    ::URI Tmp(URI);
    if (Gen.SelectFile(PackageFile,Tmp.Host,*this) == false)
       return _error->Error("Problem with SelectFile %s",PackageFile.c_str());
@@ -352,7 +354,7 @@ bool debPackagesIndex::Merge(pkgCacheGenerator &Gen,OpProgress *Prog) const
 /* */
 pkgCache::PkgFileIterator debPackagesIndex::FindInCache(pkgCache &Cache) const
 {
-   string FileName = IndexFile("Packages");
+   string FileName = IndexFile(DebOrDebdelta.c_str()); // "Packages"
    pkgCache::PkgFileIterator File = Cache.FileBegin();
    for (; File.end() == false; File++)
    {
@@ -665,6 +667,7 @@ class debIFTypeSrc : public pkgIndexFile::Type
    
    debIFTypeSrc() {Label = "Debian Source Index";};
 };
+
 class debIFTypePkg : public pkgIndexFile::Type
 {
    public:
@@ -675,11 +678,13 @@ class debIFTypePkg : public pkgIndexFile::Type
    };
    debIFTypePkg() {Label = "Debian Package Index";};
 };
+
 class debIFTypeTrans : public debIFTypePkg
 {
    public:
    debIFTypeTrans() {Label = "Debian Translation Index";};
 };
+
 class debIFTypeStatus : public pkgIndexFile::Type
 {
    public:
@@ -688,25 +693,46 @@ class debIFTypeStatus : public pkgIndexFile::Type
    {
       return new debRecordParser(File.FileName(),*File.Cache());
    };
+   
    debIFTypeStatus() {Label = "Debian dpkg status file";};
 };
+
+class debIFTypeDebdelta : public pkgIndexFile::Type
+{
+   public:
+   
+   virtual pkgRecords::Parser *CreatePkgParser(pkgCache::PkgFileIterator File) const 
+   {
+      return new debRecordParser(File.FileName(),*File.Cache());
+   };
+   
+   debIFTypeDebdelta() {Label = "Debian debdelta index";};
+};
+
 static debIFTypeSrc _apt_Src;
 static debIFTypePkg _apt_Pkg;
 static debIFTypeTrans _apt_Trans;
 static debIFTypeStatus _apt_Status;
+static debIFTypeDebdelta _apt_Debdelta;
 
 const pkgIndexFile::Type *debSourcesIndex::GetType() const
 {
    return &_apt_Src;
 }
+
 const pkgIndexFile::Type *debPackagesIndex::GetType() const
 {
-   return &_apt_Pkg;
+    if (DebOrDebdelta == "Debdeltas")
+        return &_apt_Debdelta;
+    else
+        return &_apt_Pkg;
 }
+
 const pkgIndexFile::Type *debTranslationsIndex::GetType() const
 {
    return &_apt_Trans;
 }
+
 const pkgIndexFile::Type *debStatusIndex::GetType() const
 {
    return &_apt_Status;
