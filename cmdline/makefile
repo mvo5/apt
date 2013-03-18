@@ -7,7 +7,7 @@ include ../buildlib/defaults.mak
 
 # The apt-cache program
 PROGRAM=apt-cache
-SLIBS = -lapt-pkg $(INTLLIBS)
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
 SOURCE = apt-cache.cc
 include $(PROGRAM_H)

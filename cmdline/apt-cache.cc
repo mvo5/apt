@@ -35,6 +35,8 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
+#include <apt-private/private.h>
+
 #include <cassert>
 #include <locale.h>
 #include <iostream>
@@ -383,57 +385,6 @@ bool Stats(CommandLine &Cmd)
            Cache->Head().ProvidesCount*Cache->Head().ProvidesSz;
    cout << _("Total space accounted for: ") << SizeToStr(Total) << endl;
    
-   return true;
-}
-									/*}}}*/
-// Dump - show everything						/*{{{*/
-// ---------------------------------------------------------------------
-/* This is worthless except fer debugging things */
-bool Dump(CommandLine &Cmd)
-{
-   pkgCacheFile CacheFile;
-   pkgCache *Cache = CacheFile.GetPkgCache();
-   if (unlikely(Cache == NULL))
-      return false;
-
-   cout << "Using Versioning System: " << Cache->VS->Label << endl;
-   
-   for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
-   {
-      cout << "Package: " << P.FullName(true) << endl;
-      for (pkgCache::VerIterator V = P.VersionList(); V.end() == false; ++V)
-      {
-	 cout << " Version: " << V.VerStr() << endl;
-	 cout << "     File: " << V.FileList().File().FileName() << endl;
-	 for (pkgCache::DepIterator D = V.DependsList(); D.end() == false; ++D)
-	    cout << "  Depends: " << D.TargetPkg().FullName(true) << ' ' << 
-	                     DeNull(D.TargetVer()) << endl;
-	 for (pkgCache::DescIterator D = V.DescriptionList(); D.end() == false; ++D)
-	 {
-	    cout << " Description Language: " << D.LanguageCode() << endl
-		 << "                 File: " << D.FileList().File().FileName() << endl
-		 << "                  MD5: " << D.md5() << endl;
-	 } 
-      }      
-   }
-
-   for (pkgCache::PkgFileIterator F = Cache->FileBegin(); F.end() == false; ++F)
-   {
-      cout << "File: " << F.FileName() << endl;
-      cout << " Type: " << F.IndexType() << endl;
-      cout << " Size: " << F->Size << endl;
-      cout << " ID: " << F->ID << endl;
-      cout << " Flags: " << F->Flags << endl;
-      cout << " Time: " << TimeRFC1123(F->mtime) << endl;
-      cout << " Archive: " << DeNull(F.Archive()) << endl;
-      cout << " Component: " << DeNull(F.Component()) << endl;
-      cout << " Version: " << DeNull(F.Version()) << endl;
-      cout << " Origin: " << DeNull(F.Origin()) << endl;
-      cout << " Site: " << DeNull(F.Site()) << endl;
-      cout << " Label: " << DeNull(F.Label()) << endl;
-      cout << " Architecture: " << DeNull(F.Architecture()) << endl;
-   }
-
    return true;
 }
 									/*}}}*/
