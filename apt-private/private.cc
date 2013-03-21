@@ -83,7 +83,21 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    std::string cand_ver_str = cand ? cand.VerStr() : "(none)";
    std::string arch_str = inst ? inst.Arch() : cand.Arch();
 
-   std::cout << std::setw(28) << std::setiosflags(std::ios::left) << P.Name()
+   std::string suite = "";
+   pkgCache::VerIterator ver = cand;
+   if (ver && ver.FileList() && ver.FileList())
+   {
+      pkgCache::VerFileIterator VF = ver.FileList();
+      for (; VF.end() == false ; ++VF)
+      {
+         // XXX: how to figure out the relevant suite? if its in multiple ones?
+         //suite = suite + "," + VF.File().Archive();
+         suite = VF.File().Archive();
+      }
+   }
+
+   std::string name_str = P.Name() + std::string("/") + suite;
+   std::cout << std::setw(28) << std::setiosflags(std::ios::left) << name_str
              << " " 
              << std::setw(20) << inst_ver_str
              << " " 
