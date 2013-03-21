@@ -5,6 +5,13 @@ SUBDIR=cmdline
 # Bring in the default rules
 include ../buildlib/defaults.mak
 
+# The apt program
+PROGRAM=apt
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
+LIB_MAKES = apt-pkg/makefile
+SOURCE = apt.cc
+include $(PROGRAM_H)
+
 # The apt-cache program
 PROGRAM=apt-cache
 SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)

@@ -73,6 +73,62 @@
 #include <apti18n.h>
 									/*}}}*/
 
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgCache::VerIterator inst = P.CurrentVer();
+   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+
+   std::string inst_ver_str = inst ? inst.VerStr() : "(none)";
+   std::string cand_ver_str = cand ? cand.VerStr() : "(none)";
+   std::string arch_str = inst ? inst.Arch() : cand.Arch();
+
+   std::cout << std::setw(28) << std::setiosflags(std::ios::left) << P.Name()
+             << " " 
+             << std::setw(20) << inst_ver_str
+             << " " 
+             << std::setw(20) << cand_ver_str
+             << " "
+             << std::setw(8) << arch_str
+             << " "
+             << std::endl;
+}
+
+// list - list package based on criteria        			/*{{{*/
+// ---------------------------------------------------------------------
+bool List(CommandLine &Cmd)
+{
+   pkgCacheFile CacheFile;
+   pkgCache *Cache = CacheFile.GetPkgCache();
+   pkgDepCache *DepCache = CacheFile.GetDepCache();
+   if (unlikely(Cache == NULL))
+      return false;
+
+   for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
+   {
+      pkgDepCache::StateCache &state = (*DepCache)[P];
+
+      if (_config->FindB("APT::Cmd::Installed") == true)
+      {
+         if (P.CurrentVer() != NULL)
+         {
+            ListSinglePackage(CacheFile, P);
+         }
+      }
+      else if (_config->FindB("APT::Cmd::Upgradable") == true)
+      {
+         if(P.CurrentVer() && state.Upgradable())
+         {
+            ListSinglePackage(CacheFile, P);
+         }
+      }
+      else 
+      {
+         ListSinglePackage(CacheFile, P);
+      }
+   }
+   return true;
+}
 
 // Dump - show everything						/*{{{*/
 // ---------------------------------------------------------------------
