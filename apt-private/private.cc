@@ -103,40 +103,48 @@ bool List(CommandLine &Cmd)
       return false;
 
    std::string regexp;
-   if (strv_length(Cmd.FileList + 1) == 0)
-   {
-      regexp = ".*";    
-   } else {
-      regexp = Cmd.FileList[1];
-   }
-   APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
-
    SortedPackageSet bag;
    SortedPackageSet::const_iterator I = bag.begin();
-   for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
+   // Cmd.FileList has at least "list" 
+   const char **patterns;
+   if (strv_length(Cmd.FileList + 1) == 0)
    {
-      if (regexfilter(P) == false)
-         continue;
+      const char *meep[] = { ".*", NULL};
+      patterns = meep;
+   } else {
+      patterns = Cmd.FileList + 1;
+   }
 
-      pkgDepCache::StateCache &state = (*DepCache)[P];
+   for(int i=0; patterns[i] != NULL; i++)
+   {
+      regexp = patterns[i];
+      APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
 
-      if (_config->FindB("APT::Cmd::Installed") == true)
+      for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
       {
-         if (P.CurrentVer() != NULL)
+         if (regexfilter(P) == false)
+            continue;
+         
+         pkgDepCache::StateCache &state = (*DepCache)[P];
+         
+         if (_config->FindB("APT::Cmd::Installed") == true)
+         {
+            if (P.CurrentVer() != NULL)
+            {
+               bag.insert(P);
+            }
+         }
+         else if (_config->FindB("APT::Cmd::Upgradable") == true)
+         {
+            if(P.CurrentVer() && state.Upgradable())
+            {
+               bag.insert(P);
+            }
+         }
+         else 
          {
             bag.insert(P);
          }
-      }
-      else if (_config->FindB("APT::Cmd::Upgradable") == true)
-      {
-         if(P.CurrentVer() && state.Upgradable())
-         {
-            bag.insert(P);
-         }
-      }
-      else 
-      {
-         bag.insert(P);
       }
    }
    
