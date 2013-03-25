@@ -3,6 +3,7 @@
 
 #include <apt-pkg/error.h>
 #include <apt-pkg/cachefile.h>
+#include <apt-pkg/cachefilter.h>
 #include <apt-pkg/cacheset.h>
 #include <apt-pkg/init.h>
 #include <apt-pkg/progress.h>
@@ -50,18 +51,9 @@ struct PackageSortAlphabetic
 typedef APT::PackageContainer<std::set<pkgCache::PkgIterator, PackageSortAlphabetic> > SortedPackageSet;
 
 
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+std::string GetArchiveSuite(pkgCache::VerIterator &ver)
 {
-   pkgPolicy *policy = CacheFile.GetPolicy();
-   pkgCache::VerIterator inst = P.CurrentVer();
-   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
-
-   std::string inst_ver_str = inst ? inst.VerStr() : "(none)";
-   std::string cand_ver_str = cand ? cand.VerStr() : "(none)";
-   std::string arch_str = inst ? inst.Arch() : cand.Arch();
-
    std::string suite = "";
-   pkgCache::VerIterator ver = cand;
    if (ver && ver.FileList() && ver.FileList())
    {
       pkgCache::VerFileIterator VF = ver.FileList();
@@ -72,6 +64,21 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
          suite = VF.File().Archive();
       }
    }
+   return suite;
+}
+
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgCache::VerIterator inst = P.CurrentVer();
+   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+
+   std::string inst_ver_str = inst ? inst.VerStr() : "(none)";
+   std::string cand_ver_str = cand ? cand.VerStr() : "(none)";
+   std::string arch_str = inst ? inst.Arch() : cand.Arch();
+
+   pkgCache::VerIterator ver = cand;
+   std::string suite = GetArchiveSuite(ver);
 
    std::string name_str = P.Name() + std::string("/") + suite;
    std::cout << std::setw(28) << std::setiosflags(std::ios::left) << name_str
@@ -95,11 +102,22 @@ bool List(CommandLine &Cmd)
    if (unlikely(Cache == NULL))
       return false;
 
+   std::string regexp;
+   if (strv_length(Cmd.FileList + 1) == 0)
+   {
+      regexp = ".*";    
+   } else {
+      regexp = Cmd.FileList[1];
+   }
+   APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
+
    SortedPackageSet bag;
    SortedPackageSet::const_iterator I = bag.begin();
-
    for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
    {
+      if (regexfilter(P) == false)
+         continue;
+
       pkgDepCache::StateCache &state = (*DepCache)[P];
 
       if (_config->FindB("APT::Cmd::Installed") == true)
@@ -121,12 +139,13 @@ bool List(CommandLine &Cmd)
          bag.insert(P);
       }
    }
-
+   
    // output the (now sorted) PackageSet
    for (I = bag.begin(); I != bag.end(); ++I)
    {
       ListSinglePackage(CacheFile, (*I));
    }
+
 
    return true;
 }
