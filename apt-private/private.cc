@@ -37,6 +37,19 @@
 									/*}}}*/
 #include <apt-private/private.h>
 
+struct PackageSortAlphabetic
+{
+   bool operator () (const pkgCache::PkgIterator &p_lhs, 
+                     const pkgCache::PkgIterator &p_rhs)
+    {
+       const std::string &l_name = p_lhs.FullName(true);
+       const std::string &r_name = p_rhs.FullName(true);
+       return (l_name < r_name);
+    }
+};
+typedef APT::PackageContainer<std::set<pkgCache::PkgIterator, PackageSortAlphabetic> > SortedPackageSet;
+
+
 void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 {
    pkgPolicy *policy = CacheFile.GetPolicy();
@@ -82,7 +95,8 @@ bool List(CommandLine &Cmd)
    if (unlikely(Cache == NULL))
       return false;
 
-   APT::PackageSet bag;
+   SortedPackageSet bag;
+   SortedPackageSet::const_iterator I = bag.begin();
 
    for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
    {
@@ -108,10 +122,10 @@ bool List(CommandLine &Cmd)
       }
    }
 
-   for (APT::PackageSet::const_iterator P = bag.begin();
-        P != bag.end(); ++P) 
+   // output the (now sorted) PackageSet
+   for (I = bag.begin(); I != bag.end(); ++I)
    {
-      ListSinglePackage(CacheFile, (*P));
+      ListSinglePackage(CacheFile, (*I));
    }
 
    return true;
