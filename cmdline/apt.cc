@@ -55,11 +55,13 @@ int main(int argc,const char *argv[])					/*{{{*/
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {0,0}};
 
-   if(!isatty(0))
-      std::cerr << "WARNING WARNING "
+   if(!isatty(1))
+      std::cerr << std::endl
+                << "WARNING WARNING "
                 << argv[0]
                 << " is *NOT* intended for scripts "
                 << "use at your own peril^Wrisk"
+                << std::endl
                 << std::endl;
 
    // Set up gettext support

@@ -51,8 +51,12 @@ struct PackageSortAlphabetic
 typedef APT::PackageContainer<std::set<pkgCache::PkgIterator, PackageSortAlphabetic> > SortedPackageSet;
 
 
-std::string GetArchiveSuite(pkgCache::VerIterator &ver)
+std::string GetArchiveSuite(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 {
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+
+   pkgCache::VerIterator ver = cand;
    std::string suite = "";
    if (ver && ver.FileList() && ver.FileList())
    {
@@ -67,27 +71,60 @@ std::string GetArchiveSuite(pkgCache::VerIterator &ver)
    return suite;
 }
 
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+std::string GetFlagsStr(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgDepCache *DepCache = CacheFile.GetDepCache();
+   pkgDepCache::StateCache &state = (*DepCache)[P];
+
+   std::string flags_str;
+   if (state.NowBroken())
+      flags_str = "B";
+   if (P.CurrentVer() && state.Upgradable())
+      flags_str = "u";
+   else if (P.CurrentVer() != NULL)
+      flags_str = "i";
+   else
+      flags_str = "-";
+   return flags_str;
+}
+
+std::string GetCandidateVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+
+   return cand ? cand.VerStr() : "(none)";
+}
+
+std::string GetInstalledVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgCache::VerIterator inst = P.CurrentVer();
+
+   return inst ? inst.VerStr() : "(none)";
+}
+
+std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 {
    pkgPolicy *policy = CacheFile.GetPolicy();
    pkgCache::VerIterator inst = P.CurrentVer();
    pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+   
+   return inst ? inst.Arch() : cand.Arch();
+}
 
-   std::string inst_ver_str = inst ? inst.VerStr() : "(none)";
-   std::string cand_ver_str = cand ? cand.VerStr() : "(none)";
-   std::string arch_str = inst ? inst.Arch() : cand.Arch();
-
-   pkgCache::VerIterator ver = cand;
-   std::string suite = GetArchiveSuite(ver);
-
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   std::string suite = GetArchiveSuite(CacheFile, P);
    std::string name_str = P.Name() + std::string("/") + suite;
-   std::cout << std::setw(28) << std::setiosflags(std::ios::left) << name_str
-             << " " 
-             << std::setw(20) << inst_ver_str
-             << " " 
-             << std::setw(20) << cand_ver_str
+   std::cout << std::setiosflags(std::ios::left)
+             << std::setw(2) << GetFlagsStr(CacheFile, P)
+             << std::setw(28) << name_str
              << " "
-             << std::setw(8) << arch_str
+             << std::setw(20) << GetInstalledVersion(CacheFile, P)
+             << " " 
+             << std::setw(20) << GetCandidateVersion(CacheFile, P)
+             << " "
+             << std::setw(8) << GetArchitecture(CacheFile, P)
              << " "
              << std::endl;
 }
