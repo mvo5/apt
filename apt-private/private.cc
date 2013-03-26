@@ -112,10 +112,33 @@ std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    return inst ? inst.Arch() : cand.Arch();
 }
 
+std::string GetShortDescription(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgRecords records(CacheFile);
+
+   pkgCache::VerIterator ver;
+   if (P.CurrentVer())
+      ver = P.CurrentVer();
+   else
+      ver = policy->GetCandidateVer(P);
+
+   std::string ShortDescription = "(none)";
+   if(ver)
+   {
+      pkgCache::DescIterator Desc = ver.TranslatedDescription();
+      pkgRecords::Parser & parser = records.Lookup(Desc.FileList());
+
+      ShortDescription = parser.ShortDesc();
+   }
+   return ShortDescription;
+}
+
 void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 {
    std::string suite = GetArchiveSuite(CacheFile, P);
    std::string name_str = P.Name() + std::string("/") + suite;
+
    std::cout << std::setiosflags(std::ios::left)
              << std::setw(2) << GetFlagsStr(CacheFile, P)
              << std::setw(28) << name_str
@@ -126,6 +149,7 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
              << " "
              << std::setw(8) << GetArchitecture(CacheFile, P)
              << " "
+             << std::setw(20) << GetShortDescription(CacheFile, P)
              << std::endl;
 }
 
@@ -154,11 +178,17 @@ bool List(CommandLine &Cmd)
 
    for(int i=0; patterns[i] != NULL; i++)
    {
+      // FIXME: use fnmatch() here instead? that is what dpkg -l is using
+      //        or make it a config option
       regexp = patterns[i];
       APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
 
       for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
       {
+         // exclude virtual pkgs
+         if (P.VersionList() == 0)
+            continue;
+
          if (regexfilter(P) == false)
             continue;
          
