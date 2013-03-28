@@ -26,6 +26,19 @@ public:
 	~PackageNameMatchesRegEx();
 };
 									/*}}}*/
+// PackageNameMatchesFnmatch						/*{{{*/
+class PackageNameMatchesFnmatch {
+         /** \brief dpointer placeholder (for later in case we need it) */
+         void *d;
+         const std::string Pattern;
+public:
+         PackageNameMatchesFnmatch(std::string const &Pattern) 
+            : Pattern(Pattern) {};
+	bool operator() (pkgCache::PkgIterator const &Pkg);
+	bool operator() (pkgCache::GrpIterator const &Grp);
+	~PackageNameMatchesFnmatch() {};
+};
+									/*}}}*/
 // PackageArchitectureMatchesSpecification				/*{{{*/
 /** \class PackageArchitectureMatchesSpecification
    \brief matching against architecture specification strings

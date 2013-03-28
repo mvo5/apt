@@ -221,7 +221,8 @@ bool List(CommandLine &Cmd)
       // FIXME: use fnmatch() here instead? that is what dpkg -l is using
       //        or make it a config option
       regexp = patterns[i];
-      APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
+      //APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
+      APT::CacheFilter::PackageNameMatchesFnmatch regexfilter(regexp);
 
       for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
       {
