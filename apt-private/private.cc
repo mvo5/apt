@@ -64,9 +64,10 @@ std::string GetArchiveSuite(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
       for (; VF.end() == false ; ++VF)
       {
          // XXX: how to figure out the relevant suite? if its in multiple ones?
-         //suite = suite + "," + VF.File().Archive();
-         suite = VF.File().Archive();
+         suite = suite + "," + VF.File().Archive();
+         //suite = VF.File().Archive();
       }
+      suite = suite.erase(0, 1);
    }
    return suite;
 }
@@ -101,6 +102,26 @@ std::string GetInstalledVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P
    pkgCache::VerIterator inst = P.CurrentVer();
 
    return inst ? inst.VerStr() : "(none)";
+}
+
+std::string GetVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+{
+   pkgCache::VerIterator inst = P.CurrentVer();
+   if (inst)
+   {
+      pkgDepCache *DepCache = CacheFile.GetDepCache();
+      pkgDepCache::StateCache &state = (*DepCache)[P];
+      std::string inst_str = DeNull(inst.VerStr());
+      if (state.Upgradable())
+         return "**"+inst_str;
+      return inst_str;
+   }
+
+   pkgPolicy *policy = CacheFile.GetPolicy();
+   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
+   if(cand)
+      return DeNull(cand.VerStr());
+   return "(none)";
 }
 
 std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
@@ -139,18 +160,37 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    std::string suite = GetArchiveSuite(CacheFile, P);
    std::string name_str = P.Name() + std::string("/") + suite;
 
-   std::cout << std::setiosflags(std::ios::left)
-             << std::setw(2) << GetFlagsStr(CacheFile, P)
-             << std::setw(28) << name_str
-             << " "
-             << std::setw(20) << GetInstalledVersion(CacheFile, P)
-             << " " 
-             << std::setw(20) << GetCandidateVersion(CacheFile, P)
-             << " "
-             << std::setw(8) << GetArchitecture(CacheFile, P)
-             << " "
-             << std::setw(20) << GetShortDescription(CacheFile, P)
-             << std::endl;
+   if (_config->FindB("APT::Cmd::use-format", false))
+   {
+      std::string format = _config->Find("APT::Cmd::format", "${db::Status-Abbrev} ${Package} ${Version} ${Origin} ${Description}");
+      std::string output = format;
+   
+      output = SubstVar(output, "${db::Status-Abbrev}", GetFlagsStr(CacheFile, P));
+      output = SubstVar(output, "${Package}", name_str);
+      output = SubstVar(output, "${installed:Version}", GetInstalledVersion(CacheFile, P));
+      output = SubstVar(output, "${candidate:Version}", GetCandidateVersion(CacheFile, P));
+      output = SubstVar(output, "${Version}", GetVersion(CacheFile, P));
+#if 0
+      // FXIME: this is expensive without locality sort
+      output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, P));
+#endif
+      output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, P));
+
+      std::cout << output << std::endl;
+   } else {
+      std::cout << std::setiosflags(std::ios::left)
+                << std::setw(2) << GetFlagsStr(CacheFile, P)
+                << std::setw(28) << name_str
+                << " "
+                << std::setw(20) << GetInstalledVersion(CacheFile, P)
+                << " " 
+                << std::setw(20) << GetCandidateVersion(CacheFile, P)
+                << " "
+                << std::setw(8) << GetArchitecture(CacheFile, P)
+                << " "
+                << std::setw(20) << GetShortDescription(CacheFile, P)
+                << std::endl;
+   }
 }
 
 // list - list package based on criteria        			/*{{{*/
