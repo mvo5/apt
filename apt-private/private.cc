@@ -203,7 +203,7 @@ bool List(CommandLine &Cmd)
    if (unlikely(Cache == NULL))
       return false;
 
-   std::string regexp;
+   std::string pattern;
    SortedPackageSet bag;
    SortedPackageSet::const_iterator I = bag.begin();
    // Cmd.FileList has at least "list" 
@@ -218,19 +218,20 @@ bool List(CommandLine &Cmd)
 
    for(int i=0; patterns[i] != NULL; i++)
    {
-      // FIXME: use fnmatch() here instead? that is what dpkg -l is using
-      //        or make it a config option
-      regexp = patterns[i];
-      //APT::CacheFilter::PackageNameMatchesRegEx regexfilter(regexp);
-      APT::CacheFilter::PackageNameMatchesFnmatch regexfilter(regexp);
-
+      pattern = patterns[i];
+      APT::CacheFilter::PackageMatcher *cachefilter = NULL;
+      if(_config->FindB("APT::Cmd::UseRegexp", false) == true)
+         cachefilter = new APT::CacheFilter::PackageNameMatchesRegEx(pattern);
+      else
+         cachefilter = new APT::CacheFilter::PackageNameMatchesFnmatch(pattern);
+      
       for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
       {
          // exclude virtual pkgs
          if (P.VersionList() == 0)
             continue;
 
-         if (regexfilter(P) == false)
+         if ((*cachefilter)(P) == false)
             continue;
          
          pkgDepCache::StateCache &state = (*DepCache)[P];
@@ -254,6 +255,7 @@ bool List(CommandLine &Cmd)
             bag.insert(P);
          }
       }
+      delete cachefilter;
    }
    
    // output the (now sorted) PackageSet
