@@ -206,12 +206,12 @@ bool List(CommandLine &Cmd)
    std::string pattern;
    SortedPackageSet bag;
    SortedPackageSet::const_iterator I = bag.begin();
-   // Cmd.FileList has at least "list" 
    const char **patterns;
+   const char *all_pattern[] = { "*", NULL};
+
    if (strv_length(Cmd.FileList + 1) == 0)
    {
-      const char *meep[] = { ".*", NULL};
-      patterns = meep;
+      patterns = all_pattern;
    } else {
       patterns = Cmd.FileList + 1;
    }
