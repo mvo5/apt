@@ -81,7 +81,7 @@ std::string GetFlagsStr(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    if (state.NowBroken())
       flags_str = "B";
    if (P.CurrentVer() && state.Upgradable())
-      flags_str = "u";
+      flags_str = "g";
    else if (P.CurrentVer() != NULL)
       flags_str = "i";
    else
