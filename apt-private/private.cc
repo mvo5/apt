@@ -157,8 +157,11 @@ std::string GetShortDescription(pkgCacheFile &CacheFile, pkgCache::PkgIterator P
 
 void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 {
+   pkgDepCache *DepCache = CacheFile.GetDepCache();
+   pkgDepCache::StateCache &state = (*DepCache)[P];
+
    std::string suite = GetArchiveSuite(CacheFile, P);
-   std::string name_str = P.Name() + std::string("/") + suite;
+   std::string name_str = P.Name();
 
    if (_config->FindB("APT::Cmd::use-format", false))
    {
@@ -178,17 +181,27 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
 
       std::cout << output << std::endl;
    } else {
+      // raring/linux-kernel version [upradable: new-version]
+      //    description
       std::cout << std::setiosflags(std::ios::left)
-                << std::setw(2) << GetFlagsStr(CacheFile, P)
-                << std::setw(28) << name_str
-                << " "
-                << std::setw(20) << GetInstalledVersion(CacheFile, P)
-                << " " 
-                << std::setw(20) << GetCandidateVersion(CacheFile, P)
-                << " "
-                << std::setw(8) << GetArchitecture(CacheFile, P)
-                << " "
-                << std::setw(20) << GetShortDescription(CacheFile, P)
+                << suite << "/"
+                << name_str
+                << " ";
+      if(P.CurrentVer() && state.Upgradable()) {
+         std::cout << GetInstalledVersion(CacheFile, P)
+                   << " "
+                   << "[" << _("upgradable: ")
+                   << GetCandidateVersion(CacheFile, P) << "]";
+      } else if (P.CurrentVer()) {
+         std::cout << GetInstalledVersion(CacheFile, P)
+                   << " "
+                   << _("[installed]");
+      } else {
+         std::cout << GetCandidateVersion(CacheFile, P);
+      }
+      std::cout << " " << GetArchitecture(CacheFile, P) << " ";
+      std::cout << std::endl 
+                << "    " << GetShortDescription(CacheFile, P)
                 << std::endl;
    }
 }
