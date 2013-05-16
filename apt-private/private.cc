@@ -183,9 +183,13 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    } else {
       // raring/linux-kernel version [upradable: new-version]
       //    description
+      const char *red = "\x1B[35m";
+      const char *neutral = "\x1B[0m";
       std::cout << std::setiosflags(std::ios::left)
                 << suite << "/"
+                << red
                 << name_str
+                << neutral
                 << " ";
       if(P.CurrentVer() && state.Upgradable()) {
          std::cout << GetInstalledVersion(CacheFile, P)
