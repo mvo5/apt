@@ -22,8 +22,8 @@ GPG="$GPG_CMD"
 MASTER_KEYRING=/usr/share/keyrings/ubuntu-master-keyring.gpg
 ARCHIVE_KEYRING=/usr/share/keyrings/ubuntu-archive-keyring.gpg
 REMOVED_KEYS=/usr/share/keyrings/ubuntu-archive-removed-keys.gpg
-ARCHIVE_KEYRING_URI=http://archive.ubuntu.com/ubuntu/project/ubuntu-archive-keyring.gpg
-TMP_KEYRING=/var/lib/apt/keyrings/maybe-import-keyring.gpg
+ARCHIVE_KEYRING_URI=http://archive.ubuntu.com/ubuntu/project/ubuntu-archive-keyring.gpg.sig
+DOWNLOAD_KEYRING_DIR=/var/lib/apt/keyrings
 
 requires_root() {
 	if [ "$(id -u)" -ne 0 ]; then
@@ -42,63 +42,10 @@ init_keyring() {
     done
 }
 
-add_keys_with_verify_against_master_keyring() {
-    ADD_KEYRING=$1
-    MASTER=$2
-
-    if [ ! -f "$ADD_KEYRING" ]; then
-	echo "ERROR: '$ADD_KEYRING' not found"
-	return
-    fi 
-    if [ ! -f "$MASTER" ]; then
-	echo "ERROR: '$MASTER' not found"
-	return
-    fi
-
-    # when adding new keys, make sure that the archive-master-keyring
-    # is honored. so:
-    #   all keys that are exported must have a valid signature
-    #   from a key in the $distro-master-keyring
-    add_keys=`$GPG_CMD --keyring $ADD_KEYRING --with-colons --list-keys | grep ^pub | cut -d: -f5`
-    all_add_keys=`$GPG_CMD --keyring $ADD_KEYRING --with-colons --list-keys | grep ^[ps]ub | cut -d: -f5`
-    master_keys=`$GPG_CMD --keyring $MASTER --with-colons --list-keys | grep ^pub | cut -d: -f5`
-
-    # ensure there are no colisions LP: #857472
-    for all_add_key in $all_add_keys; do
-	for master_key in $master_keys; do
-            if [ "$all_add_key" = "$master_key" ]; then
-                echo >&2 "Keyid collision for '$all_add_key' detected, operation aborted"
-                return 1
-            fi
-        done
-    done
-    
-    for add_key in $add_keys; do
-        # export the add keyring one-by-one
-        rm -f $TMP_KEYRING
-        $GPG_CMD --keyring $ADD_KEYRING --output $TMP_KEYRING --export $add_key 
-        # check if signed with the master key and only add in this case
-        ADDED=0
-	for master_key in $master_keys; do
-	    if $GPG_CMD --keyring $MASTER --keyring $TMP_KEYRING --check-sigs --with-colons $add_key | grep '^sig:!:' | cut -d: -f5 | grep -q $master_key; then
-		$GPG --import $TMP_KEYRING
-		ADDED=1
-	    fi
-	done
-	if [ $ADDED = 0 ]; then
-	    echo >&2 "Key '$add_key' not added. It is not signed with a master key"
-	fi
-    done
-    rm -f $TMP_KEYRING
-}
-
 # update the current archive signing keyring from a network URI
 # the archive-keyring keys needs to be signed with the master key
 # (otherwise it does not make sense from a security POV)
 net_update() {
-    # Disabled for now as code is insecure (LP: #1013639 (and 857472, 1013128))
-    exit 1
-
     if [ -z "$ARCHIVE_KEYRING_URI" ]; then
 	echo >&2 "ERROR: Your distribution is not supported in net-update as no uri for the archive-keyring is set"
 	exit 1
@@ -110,22 +57,33 @@ net_update() {
 	echo >&2 "ERROR: an installed wget is required for a network-based update"
 	exit 1
     fi
-    if [ ! -d /var/lib/apt/keyrings ]; then
-	mkdir -p /var/lib/apt/keyrings
+    if [ ! -d $DOWNLOAD_KEYRING_DIR ]; then
+	mkdir -p $DOWNLOAD_KEYRING_DIR
     fi
-    keyring=/var/lib/apt/keyrings/$(basename $ARCHIVE_KEYRING)
+    keyring=$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING)
+    keyring_with_sig=$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING_URI)
     old_mtime=0
     if [ -e $keyring ]; then
 	old_mtime=$(stat -c %Y $keyring)
     fi
-    (cd  /var/lib/apt/keyrings; wget --timeout=90 -q -N $ARCHIVE_KEYRING_URI)
-    if [ ! -e $keyring ]; then
+    (cd  $DOWNLOAD_KEYRING_DIR; wget --timeout=90 -q -N $ARCHIVE_KEYRING_URI)
+    if [ ! -e $keyring_with_sig ]; then
 	return
     fi
+
+    # verify downloaded keyring against the master_keyring
+    if ! $GPG_CMD --quiet --keyring $MASTER_KEYRING --output ${keyring}.tmp --decrypt $keyring_with_sig; then
+        echo "Failed to verify downloaded keyring"
+        rm -f $keyring_with_sig ${keyring}.tmp
+        exit 1
+    else
+        mv ${keyring}.tmp $keyring
+    fi
+
     new_mtime=$(stat -c %Y $keyring)
     if [ $new_mtime -ne $old_mtime ]; then
 	echo "Checking for new archive signing keys now"
-	add_keys_with_verify_against_master_keyring $keyring $MASTER_KEYRING
+	$GPG_CMD --quiet --batch --keyring $keyring --export | $GPG --import
     fi
 }
 

@@ -12,84 +12,70 @@ requires_root() {
     return 0
 }
 
+# ensure this works in our tempdir
+mkdir -p ./usr/share/keyrings/ ./etc/apt
+MASTER_KEYRING=./usr/share/keyrings/mock-master-keyring.gpg
+ARCHIVE_KEYRING=./usr/share/keyrings/mock-archive-keyring.gpg
+ARCHIVE_KEYRING_URI=http://localhost:8080/mock-archive-keyring.gpg.sig
+
+DOWNLOAD_KEYRING_DIR=./var/lib/apt/keyrings
+GPG_CMD="gpg --ignore-time-conflict --no-options --no-default-keyring"
+
+TRUSTEDFILE="./etc/apt/trusted.gpg"
+touch $TRUSTEDFILE
+GPG="$GPG_CMD --keyring $TRUSTEDFILE"
+
 # extract net_update() and import it
-func=$( sed -n -e '/^add_keys_with_verify_against_master_keyring/,/^}/p' ${BUILDDIRECTORY}/apt-key )
+func=$( sed -n -e '/^net_update/,/^}/p' ${BUILDDIRECTORY}/apt-key )
 eval "$func"
 
-mkdir -p ./etc/apt
-TRUSTEDFILE=./etc/apt/trusted.gpg
-mkdir -p ./var/lib/apt/keyrings
-TMP_KEYRING=./var/lib/apt/keyrings/maybe-import-keyring.gpg
-GPG_CMD="gpg --ignore-time-conflict --no-options --no-default-keyring"
-GPG="$GPG_CMD --keyring $TRUSTEDFILE"
-MASTER_KEYRING=/usr/share/keyrings/ubuntu-master-keyring.gpg
+# start server
+changetowebserver
+
+# create empty archive keyring
+echo > $ARCHIVE_KEYRING
+# copy fake master keyring
+cp keys/fake-master-key.pub $MASTER_KEYRING
+
+############################################### test incorrect signature
 
 
-msgtest "add_keys_with_verify_against_master_keyring"
-if [ ! -e $MASTER_KEYRING ]; then
-    echo -n "No $MASTER_KEYRING found"
-    msgskip 
-    exit 0
-fi
+# create incorrectly signed keyring
+gpg --no-default-keyring --keyring ./keys/marvinparanoid.pub --secret-keyring ./keys/marvinparanoid.sec  --output joesixpack.pub.sig --sign ./keys/joesixpack.pub
+# put updated archive keyring on the local server and server it over http
+mv joesixpack.pub.sig aptarchive/mock-archive-keyring.gpg.sig
 
-# test bad keyring and ensure its not added (LP: #857472)
-ADD_KEYRING=./keys/exploid-keyring-with-dupe-keys.pub
-if add_keys_with_verify_against_master_keyring $ADD_KEYRING $MASTER_KEYRING; then
-    msgfail
-else
-    msgpass
-fi
+size=$(stat -c %s $TRUSTEDFILE)
+testequal "0" echo "$size"
 
-# ensure the keyring is still empty
-gpg_out=$($GPG --list-keys)
-msgtest "Test if keyring is empty"
-if [ -n "" ]; then
-    msgfail
-else
-    msgpass
-fi
+testfilenotexists "$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING)"
 
+# run it (in a subshell, exit 1 is called in net_update)
+(
+ net_update
+) || true
 
-# test another possible attack vector using subkeys (LP: #1013128)
-msgtest "add_keys_with_verify_against_master_keyring with subkey attack"
-ADD_KEYRING=./keys/exploid-keyring-with-dupe-subkeys.pub
-if add_keys_with_verify_against_master_keyring $ADD_KEYRING $MASTER_KEYRING; then
-    msgfail
-else
-    msgpass
-fi
+# ensure nothing was imported 
+size=$(stat -c %s $TRUSTEDFILE)
+testequal "0" echo "$size"
+# ensure the file was not unpacked
+testfilenotexists "$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING)"
 
-# ensure the keyring is still empty
-gpg_out=$($GPG --list-keys)
-msgtest "Test if keyring is empty"
-if [ -n "" ]; then
-    msgfail
-else
-    msgpass
-fi
+############################################### test good signature
 
+# create new signed keyring for the net-update feature testing
+gpg --no-default-keyring --keyring ./keys/fake-master-key.pub --secret-keyring ./keys/fake-master-key.sec  --output joesixpack.pub.sig --sign ./keys/joesixpack.pub
+# put updated archive keyring on the local server and server it over http
+mv joesixpack.pub.sig aptarchive/mock-archive-keyring.gpg.sig
 
-# test good keyring and ensure we get no errors
-ADD_KEYRING=/usr/share/keyrings/ubuntu-archive-keyring.gpg
-if add_keys_with_verify_against_master_keyring $ADD_KEYRING $MASTER_KEYRING; then
-    msgpass
-else
-    msgfail
-fi
+size=$(stat -c %s $TRUSTEDFILE)
+testequal "0" echo "$size"
 
-testequal './etc/apt/trusted.gpg
----------------------
-pub   1024D/437D05B5 2004-09-12
-uid                  Ubuntu Archive Automatic Signing Key <ftpmaster@ubuntu.com>
-sub   2048g/79164387 2004-09-12
+# run it
+net_update 
 
-pub   1024D/FBB75451 2004-12-30
-uid                  Ubuntu CD Image Automatic Signing Key <cdimage@ubuntu.com>
+size=$(stat -c %s $TRUSTEDFILE)
+size=$(stat -c %s $TRUSTEDFILE)
+testequal "643" echo "$size"
 
-pub   4096R/C0B21F32 2012-05-11
-uid                  Ubuntu Archive Automatic Signing Key (2012) <ftpmaster@ubuntu.com>
-
-pub   4096R/EFE21092 2012-05-11
-uid                  Ubuntu CD Image Automatic Signing Key (2012) <cdimage@ubuntu.com>
-' $GPG --list-keys
-
+testfileexists "$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING)"
