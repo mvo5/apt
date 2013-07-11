@@ -6,6 +6,7 @@
 #include <apt-pkg/fileutl.h>
 #include <apt-pkg/indexcopy.h>
 #include <apt-pkg/configuration.h>
+#include <apt-pkg/gpgv.h>
 
 #include <utime.h>
 #include <stdio.h>
@@ -54,9 +55,6 @@ string GPGVMethod::VerifyGetSigners(const char *file, const char *outfile,
 					 vector<string> &NoPubKeySigners)
 {
    bool const Debug = _config->FindB("Debug::Acquire::gpgv", false);
-   // setup a (empty) stringstream for formating the return value
-   std::stringstream ret;
-   ret.str("");
 
    if (Debug == true)
       std::clog << "inside VerifyGetSigners" << std::endl;
@@ -70,19 +68,7 @@ string GPGVMethod::VerifyGetSigners(const char *file, const char *outfile,
    if (pid < 0)
       return string("Couldn't spawn new process") + strerror(errno);
    else if (pid == 0)
-   {
-      _error->PushToStack();
-      bool const success = SigVerify::RunGPGV(outfile, file, 3, fd);
-      if (success == false)
-      {
-	 string errmsg;
-	 _error->PopMessage(errmsg);
-	 _error->RevertToStack();
-	 return errmsg;
-      }
-      _error->RevertToStack();
-      exit(111);
-   }
+      ExecGPGV(outfile, file, 3, fd);
    close(fd[1]);
 
    FILE *pipein = fdopen(fd[0], "r");
@@ -181,18 +167,19 @@ string GPGVMethod::VerifyGetSigners(const char *file, const char *outfile,
       return "";
    }
    else if (WEXITSTATUS(status) == 1)
-   {
       return _("At least one invalid signature was encountered.");
-   }
    else if (WEXITSTATUS(status) == 111)
+      return _("Could not execute 'gpgv' to verify signature (is gpgv installed?)");
+   else if (WEXITSTATUS(status) == 112)
    {
-      ioprintf(ret, _("Could not execute 'gpgv' to verify signature (is gpgv installed?)"));
-      return ret.str();
+      // acquire system checks for "NODATA" to generate GPG errors (the others are only warnings)
+      std::string errmsg;
+      //TRANSLATORS: %s is a single techy word like 'NODATA'
+      strprintf(errmsg, _("Clearsigned file isn't valid, got '%s' (does the network require authentication?)"), "NODATA");
+      return errmsg;
    }
    else
-   {
       return _("Unknown error executing gpgv");
-   }
 }
 
 bool GPGVMethod::Fetch(FetchItem *Itm)

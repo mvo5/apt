@@ -117,7 +117,13 @@ char *_strstrip(char *String)
 
    if (*String == 0)
       return String;
-
+   return _strrstrip(String);
+}
+									/*}}}*/
+// strrstrip - Remove white space from the back of a string	/*{{{*/
+// ---------------------------------------------------------------------
+char *_strrstrip(char *String)
+{
    char *End = String + strlen(String) - 1;
    for (;End != String - 1 && (*End == ' ' || *End == '\t' || *End == '\n' ||
 			       *End == '\r'); End--);
@@ -753,7 +759,7 @@ bool ReadMessages(int Fd, vector<string> &List)
       for (char *I = Buffer; I + 1 < End; I++)
       {
 	 if (I[1] != '\n' ||
-	     (strncmp(I, "\n\n", 2) != 0 && strncmp(I, "\r\n\r\n", 4) != 0))
+	       (I[0] != '\n' && strncmp(I, "\r\n\r\n", 4) != 0))
 	    continue;
 	 
 	 // Pull the message out
@@ -761,7 +767,7 @@ bool ReadMessages(int Fd, vector<string> &List)
 	 PartialMessage += Message;
 
 	 // Fix up the buffer
-	 for (; I < End && (*I == '\r' || *I == '\n'); ++I);
+	 for (; I < End && (*I == '\n' || *I == '\r'); ++I);
 	 End -= I-Buffer;	 
 	 memmove(Buffer,I,End-Buffer);
 	 I = Buffer;
@@ -1247,7 +1253,7 @@ string StripEpoch(const string &VerStr)
       return VerStr;
    return VerStr.substr(i+1);
 }
-
+									/*}}}*/
 // tolower_ascii - tolower() function that ignores the locale		/*{{{*/
 // ---------------------------------------------------------------------
 /* This little function is the most called method we have and tries
@@ -1297,14 +1303,14 @@ size_t strv_length(const char **str_array)
    return i;
 }
 
-// DeEscapeString - unescape (\0XX and \xXX) from a string      	/*{{{*/
+// DeEscapeString - unescape (\0XX and \xXX) from a string		/*{{{*/
 // ---------------------------------------------------------------------
 /* */
 string DeEscapeString(const string &input)
 {
    char tmp[3];
-   string::const_iterator it, escape_start;
-   string output, octal, hex;
+   string::const_iterator it;
+   string output;
    for (it = input.begin(); it != input.end(); ++it)
    {
       // just copy non-escape chars
@@ -1490,9 +1496,12 @@ URI::operator string()
           
       if (User.empty() == false)
       {
-	 Res +=  User;
+	 // FIXME: Technically userinfo is permitted even less
+	 // characters than these, but this is not conveniently
+	 // expressed with a blacklist.
+	 Res += QuoteString(User, ":/?#[]@");
 	 if (Password.empty() == false)
-	    Res += ":" + Password;
+	    Res += ":" + QuoteString(Password, ":/?#[]@");
 	 Res += "@";
       }
       
@@ -1531,7 +1540,6 @@ string URI::SiteOnly(const string &URI)
    U.User.clear();
    U.Password.clear();
    U.Path.clear();
-   U.Port = 0;
    return U;
 }
 									/*}}}*/
@@ -1543,7 +1551,6 @@ string URI::NoUserPassword(const string &URI)
    ::URI U(URI);
    U.User.clear();
    U.Password.clear();
-   U.Port = 0;
    return U;
 }
 									/*}}}*/

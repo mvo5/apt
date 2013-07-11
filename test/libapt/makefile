@@ -2,6 +2,7 @@
 BASE=../..
 SUBDIR=test/libapt
 BASENAME=_libapt_test
+APT_DOMAIN=none
 
 # Bring in the default rules
 include ../../buildlib/defaults.mak
@@ -93,7 +94,7 @@ SLIBS = -lapt-pkg
 SOURCE = cdromreducesourcelist_test.cc
 include $(PROGRAM_H)
 
-# text IndexCopy::ConvertToSourceList
+# test IndexCopy::ConvertToSourceList
 PROGRAM = IndexCopyToSourceList${BASENAME}
 SLIBS = -lapt-pkg
 SOURCE = indexcopytosourcelist_test.cc
@@ -103,3 +104,10 @@ PROGRAM = FileUtl${BASENAME}
 SLIBS = -lapt-pkg 
 SOURCE = fileutl_test.cc
 include $(PROGRAM_H)
+
+# test tagfile
+PROGRAM = PkgTagFile${BASENAME}
+SLIBS = -lapt-pkg
+SOURCE = tagfile_test.cc
+include $(PROGRAM_H)
+

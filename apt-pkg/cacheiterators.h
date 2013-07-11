@@ -220,6 +220,7 @@ class pkgCache::VerIterator : public Iterator<Version, VerIterator> {
 	inline VerFileIterator FileList() const;
 	bool Downloadable() const;
 	inline const char *PriorityType() const {return Owner->Priority(S->Priority);};
+	const char *MultiArchType() const;
 	std::string RelStr() const;
 
 	bool Automatic() const;
@@ -286,6 +287,8 @@ class pkgCache::DepIterator : public Iterator<Dependency, DepIterator> {
 	bool IsIgnorable(PrvIterator const &Prv) const;
 	bool IsIgnorable(PkgIterator const &Pkg) const;
 	bool IsMultiArchImplicit() const;
+	bool IsSatisfied(VerIterator const &Ver) const;
+	bool IsSatisfied(PrvIterator const &Prv) const;
 	void GlobOr(DepIterator &Start,DepIterator &End);
 	Version **AllTargets() const;
 	bool SmartTargetPkg(PkgIterator &Result) const;
