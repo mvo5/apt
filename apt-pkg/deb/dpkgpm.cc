@@ -633,8 +633,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 	     << ":" << s
 	     << endl;
       if(_config->FindB("DPkgPM::Progress", false) == true)
-         SendTerminalProgress(PackagesDone/float(PackagesTotal)*100.0);
-
+         SendTerminalProgress(PackagesDone/float(PackagesTotal)*100.0, s);
       if(OutStatusFd > 0)
 	 FileFd::Write(OutStatusFd, status.str().c_str(), status.str().size());
       if (Debug == true)
@@ -881,11 +880,13 @@ bool pkgDPkgPM::CloseLog()
 // ---------------------------------------------------------------------
 /* Send progress info to the terminal
  */
-void pkgDPkgPM::SendTerminalProgress(float percentage)
+void pkgDPkgPM::SendTerminalProgress(float percentage, std::string message)
 {
    // FIXME: use colors too
    std::cout << "\r\n"
-             << "Progress: [" << percentage << "%]"
+             << _config->Find("APT::Color::Progress-Start", "")
+             << "Progress: [" << percentage << "%] " << message
+             << _config->Find("APT::Color::Progress-Stop", "")
              << "\r\n";
 }
 									/*}}}*/
