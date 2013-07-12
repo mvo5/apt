@@ -1688,9 +1688,9 @@ void SigWinch(int)
 bool DoUpgrade(CommandLine &CmdL)
 {
    if (_config->FindB("APT::Get::UpgradeAllowNew", false) == true)
-      DoUpgradeWithAllowNewPackages(CmdL);
+      return DoUpgradeWithAllowNewPackages(CmdL);
    else
-      DoUpgradeNoNewPackages(CmdL);
+      return DoUpgradeNoNewPackages(CmdL);
 }
 
 int main(int argc,const char *argv[])					/*{{{*/

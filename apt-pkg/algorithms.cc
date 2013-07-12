@@ -429,7 +429,7 @@ bool pkgDistUpgrade(pkgDepCache &Cache)
    to install packages not marked for install */
 bool pkgAllUpgrade(pkgDepCache &Cache)
 {
-   pkgAllUpgrade(Cache, false);
+   return pkgAllUpgrade(Cache, false);
 }
 bool pkgAllUpgrade(pkgDepCache &Cache, bool auto_install)
 {
