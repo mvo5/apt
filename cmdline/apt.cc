@@ -49,6 +49,25 @@
 #include <apt-private/private-output.h>
 									/*}}}*/
 
+bool ShowHelp(CommandLine &CmdL)
+{
+   ioprintf(c1out,_("%s %s for %s compiled on %s %s\n"),PACKAGE,PACKAGE_VERSION,
+	    COMMON_ARCH,__DATE__,__TIME__);
+
+   // FIXME: generate from CommandLine
+   c1out << 
+    _("Usage: apt [options] command\n"
+      "\n"
+      "CLI for apt.\n"
+      "Commands: \n"
+      " list - list packages\n"
+      " install - install packages\n"
+      " upgrade - upgrade the system packages\n"
+       );
+   
+   return true;
+}
+
 int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Args Args[] = {
@@ -58,6 +77,7 @@ int main(int argc,const char *argv[])					/*{{{*/
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {"install",&DoInstall},
                                    {"upgrade",&DoUpgradeWithAllowNewPackages},
+                                   {"help",&ShowHelp},
                                    {0,0}};
 
    if(!isatty(1))
@@ -91,6 +111,15 @@ int main(int argc,const char *argv[])					/*{{{*/
    {
       _error->DumpErrors();
       return 100;
+   }
+
+   // See if the help should be shown
+   if (_config->FindB("help") == true ||
+       _config->FindB("version") == true ||
+       CmdL.FileSize() == 0)
+   {
+      ShowHelp(CmdL);
+      return 0;
    }
 
    CmdL.DispatchArg(Cmds);
