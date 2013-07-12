@@ -577,11 +577,11 @@ bool DoAutomaticRemove(CacheFile &Cache)
 									/*}}}*/
 
 
-// DoUpgrade - Upgrade all packages					/*{{{*/
+// DoUpgradeNoNewPackages - Upgrade all packages        		/*{{{*/
 // ---------------------------------------------------------------------
 /* Upgrade all packages without installing new packages or erasing old
    packages */
-bool DoUpgrade(CommandLine &CmdL)
+bool DoUpgradeNoNewPackages(CommandLine &CmdL)
 {
    CacheFile Cache;
    if (Cache.OpenForInstall() == false || Cache.CheckDeps() == false)
@@ -599,7 +599,7 @@ bool DoUpgrade(CommandLine &CmdL)
 									/*}}}*/
 
 // DoSafeUpgrade - Upgrade all packages with install but not remove	/*{{{*/
-bool DoSafeUpgrade(CommandLine &CmdL)
+bool DoUpgradeWithAllowNewPackages(CommandLine &CmdL)
 {
    CacheFile Cache;
    if (Cache.OpenForInstall() == false || Cache.CheckDeps() == false)

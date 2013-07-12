@@ -1684,6 +1684,15 @@ void SigWinch(int)
 #endif
 }
 									/*}}}*/
+
+bool DoUpgrade(CommandLine &CmdL)
+{
+   if (_config->FindB("APT::Get::UpgradeAllowNew", false) == true)
+      DoUpgradeWithAllowNewPackages(CmdL);
+   else
+      DoUpgradeNoNewPackages(CmdL);
+}
+
 int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Args Args[] = {
@@ -1728,6 +1737,7 @@ int main(int argc,const char *argv[])					/*{{{*/
       {0,"only-source","APT::Get::Only-Source",0},
       {0,"arch-only","APT::Get::Arch-Only",0},
       {0,"auto-remove","APT::Get::AutomaticRemove",0},
+      {0,"allow-new","APT::Get::UpgradeAllowNew",0},
       {0,"allow-unauthenticated","APT::Get::AllowUnauthenticated",0},
       {0,"install-recommends","APT::Install-Recommends",CommandLine::Boolean},
       {0,"install-suggests","APT::Install-Suggests",CommandLine::Boolean},

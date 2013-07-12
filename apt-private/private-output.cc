@@ -8,6 +8,7 @@ using namespace std;
 #include <apt-pkg/strutl.h>
 
 #include "private-output.h"
+#include "private-cachefile.h"
 
 #include <apti18n.h>
 
