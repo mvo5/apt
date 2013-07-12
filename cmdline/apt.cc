@@ -57,6 +57,8 @@ int main(int argc,const char *argv[])					/*{{{*/
       {0,0,0,0}};
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {"install",&DoInstall},
+                                   {"old-upgrade",&DoUpgrade},
+                                   {"safe-upgrade",&DoSafeUpgrade},
                                    {0,0}};
 
    if(!isatty(1))

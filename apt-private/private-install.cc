@@ -577,6 +577,44 @@ bool DoAutomaticRemove(CacheFile &Cache)
 									/*}}}*/
 
 
+// DoUpgrade - Upgrade all packages					/*{{{*/
+// ---------------------------------------------------------------------
+/* Upgrade all packages without installing new packages or erasing old
+   packages */
+bool DoUpgrade(CommandLine &CmdL)
+{
+   CacheFile Cache;
+   if (Cache.OpenForInstall() == false || Cache.CheckDeps() == false)
+      return false;
+
+   // Do the upgrade
+   if (pkgAllUpgrade(Cache) == false)
+   {
+      ShowBroken(c1out,Cache,false);
+      return _error->Error(_("Internal error, AllUpgrade broke stuff"));
+   }
+   
+   return InstallPackages(Cache,true);
+}
+									/*}}}*/
+
+// DoSafeUpgrade - Upgrade all packages with install but not remove	/*{{{*/
+bool DoSafeUpgrade(CommandLine &CmdL)
+{
+   CacheFile Cache;
+   if (Cache.OpenForInstall() == false || Cache.CheckDeps() == false)
+      return false;
+
+   // Do the upgrade
+   if (pkgAllUpgrade(Cache, true) == false)
+   {
+      ShowBroken(c1out,Cache,false);
+      return _error->Error(_("Internal error, AllUpgrade broke stuff"));
+   }
+   
+   return InstallPackages(Cache,true);
+}
+									/*}}}*/
 
 
 // DoInstall - Install packages from the command line			/*{{{*/

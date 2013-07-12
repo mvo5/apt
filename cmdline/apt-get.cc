@@ -353,26 +353,6 @@ bool DoUpdate(CommandLine &CmdL)
    return true;
 }
 									/*}}}*/
-// DoUpgrade - Upgrade all packages					/*{{{*/
-// ---------------------------------------------------------------------
-/* Upgrade all packages without installing new packages or erasing old
-   packages */
-bool DoUpgrade(CommandLine &CmdL)
-{
-   CacheFile Cache;
-   if (Cache.OpenForInstall() == false || Cache.CheckDeps() == false)
-      return false;
-
-   // Do the upgrade
-   if (pkgAllUpgrade(Cache) == false)
-   {
-      ShowBroken(c1out,Cache,false);
-      return _error->Error(_("Internal error, AllUpgrade broke stuff"));
-   }
-   
-   return InstallPackages(Cache,true);
-}
-									/*}}}*/
 /* mark packages as automatically/manually installed.			{{{*/
 bool DoMarkAuto(CommandLine &CmdL)
 {
@@ -1823,7 +1803,7 @@ int main(int argc,const char *argv[])					/*{{{*/
       _config->Set("quiet","1");
 
    // Setup the output streams
-   InitOutput;
+   InitOutput();
 
    // Setup the signals
    signal(SIGPIPE,SIG_IGN);

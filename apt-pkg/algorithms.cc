@@ -427,7 +427,7 @@ bool pkgDistUpgrade(pkgDepCache &Cache)
 /* Right now the system must be consistent before this can be called.
    It also will not change packages marked for install, it only tries
    to install packages not marked for install */
-bool pkgAllUpgrade(pkgDepCache &Cache)
+bool pkgAllUpgrade(pkgDepCache &Cache, bool auto_install)
 {
    std::string const solver = _config->Find("APT::Solver", "internal");
    if (solver != "internal") {
@@ -453,7 +453,7 @@ bool pkgAllUpgrade(pkgDepCache &Cache)
 	    continue;
       
       if (I->CurrentVer != 0 && Cache[I].InstallVer != 0)
-	 Cache.MarkInstall(I, false, 0, false);
+	 Cache.MarkInstall(I, auto_install, 0, false);
    }
       
    return Fix.ResolveByKeep();

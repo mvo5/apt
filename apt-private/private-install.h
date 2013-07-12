@@ -8,6 +8,9 @@
 #define RAMFS_MAGIC     0x858458f6
 
 bool DoInstall(CommandLine &Cmd);
+bool DoUpgrade(CommandLine &CmdL);
+bool DoSafeUpgrade(CommandLine &CmdL);
+
 
 bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask = true,
                         bool Safety = true);
