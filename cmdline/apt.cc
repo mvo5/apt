@@ -47,6 +47,8 @@
 #include <apt-private/private-list.h>
 #include <apt-private/private-install.h>
 #include <apt-private/private-output.h>
+#include <apt-private/private-update.h>
+#include <apt-private/private-update.h>
 									/*}}}*/
 
 bool ShowHelp(CommandLine &CmdL)
@@ -61,8 +63,9 @@ bool ShowHelp(CommandLine &CmdL)
       "CLI for apt.\n"
       "Commands: \n"
       " list - list packages\n"
+      " update - update list of available packages\n"
       " install - install packages\n"
-      " upgrade - upgrade the system packages\n"
+      " upgrade - upgrade the systems packages\n"
        );
    
    return true;
@@ -145,8 +148,12 @@ int main(int argc,const char *argv[])					/*{{{*/
       {0,"upgradable","APT::Cmd::Upgradable",0},
       {0,0,0,0}};
    CommandLine::Dispatch Cmds[] = {{"list",&List},
+                                   // needs root
                                    {"install",&DoInstall},
+                                   {"remove", &DoInstall},
+                                   {"update",&DoUpdate},
                                    {"upgrade",&DoUpgradeWithAllowNewPackages},
+                                   // helper
                                    {"moo",&DoMoo},
                                    {"help",&ShowHelp},
                                    {0,0}};
