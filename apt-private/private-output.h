@@ -8,7 +8,8 @@
 
 #include <apti18n.h>
 
-#include "private-cachefile.h"
+// forward declaration
+class CacheFile;
 
 extern std::ostream c0out;
 extern std::ostream c1out;

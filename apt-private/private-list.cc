@@ -1,3 +1,13 @@
+#include <cassert>
+#include <locale.h>
+#include <iostream>
+#include <unistd.h>
+#include <errno.h>
+#include <regex.h>
+#include <stdio.h>
+#include <iomanip>
+#include <algorithm>
+
 // Include Files							/*{{{*/
 #include<config.h>
 
@@ -22,21 +32,10 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
-#include <apt-private/private.h>
-
-#include <cassert>
-#include <locale.h>
-#include <iostream>
-#include <unistd.h>
-#include <errno.h>
-#include <regex.h>
-#include <stdio.h>
-#include <iomanip>
-#include <algorithm>
-
 #include <apti18n.h>
 									/*}}}*/
-#include <apt-private/private.h>
+#include "private-list.h"
+#include "private-output.h"
 
 struct PackageSortAlphabetic
 {
@@ -183,13 +182,11 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    } else {
       // raring/linux-kernel version [upradable: new-version]
       //    description
-      const char *red = "\x1B[35m";
-      const char *neutral = "\x1B[0m";
       std::cout << std::setiosflags(std::ios::left)
                 << suite << "/"
-                << red
+                << _config->Find("APT::Color::Highlight", "")
                 << name_str
-                << neutral
+                << _config->Find("APT::Color::Neutral", "")
                 << " ";
       if(P.CurrentVer() && state.Upgradable()) {
          std::cout << GetInstalledVersion(CacheFile, P)

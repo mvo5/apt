@@ -869,9 +869,10 @@ bool pkgDPkgPM::CloseLog()
  */
 void pkgDPkgPM::SendTerminalProgress(float percentage)
 {
-   // FIXME: use colors too
    std::cout << "\r\n"
+             << _config->Find("APT::Color::Highlight", "")
              << "Progress: [" << percentage << "%]"
+             << _config->Find("APT::Color::Neutral", "")
              << "\r\n";
 }
 									/*}}}*/
