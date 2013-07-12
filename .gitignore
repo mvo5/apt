@@ -6,6 +6,9 @@
 /buildlib/config.sub
 /configure
 
+# backup  files
+*~
+
 # copy of COPYING
 /debian/copyright
 

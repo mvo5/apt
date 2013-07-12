@@ -11,6 +11,17 @@
 // Include Files							/*{{{*/
 #include<config.h>
 
+#include <cassert>
+#include <locale.h>
+#include <iostream>
+#include <unistd.h>
+#include <errno.h>
+#include <regex.h>
+#include <stdio.h>
+#include <iomanip>
+#include <algorithm>
+
+
 #include <apt-pkg/error.h>
 #include <apt-pkg/cachefile.h>
 #include <apt-pkg/cacheset.h>
@@ -31,19 +42,11 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
-#include <apt-private/private.h>
-
-#include <cassert>
-#include <locale.h>
-#include <iostream>
-#include <unistd.h>
-#include <errno.h>
-#include <regex.h>
-#include <stdio.h>
-#include <iomanip>
-#include <algorithm>
-
 #include <apti18n.h>
+
+#include <apt-private/private.h>
+#include <apt-private/private-install.h>
+#include <apt-private/private-output.h>
 									/*}}}*/
 
 int main(int argc,const char *argv[])					/*{{{*/
@@ -53,6 +56,7 @@ int main(int argc,const char *argv[])					/*{{{*/
       {0,"upgradable","APT::Cmd::Upgradable",0},
       {0,0,0,0}};
    CommandLine::Dispatch Cmds[] = {{"list",&List},
+                                   {"install",&DoInstall},
                                    {0,0}};
 
    if(!isatty(1))
@@ -64,14 +68,24 @@ int main(int argc,const char *argv[])					/*{{{*/
                 << std::endl
                 << std::endl;
 
+   InitOutput();
+
    // Set up gettext support
    setlocale(LC_ALL,"");
    textdomain(PACKAGE);
 
+    if(pkgInitConfig(*_config) == false) 
+    {
+        _error->DumpErrors();
+        return 100;
+    }
+
+   // FIXME: move into a new libprivate/private-install.cc:Install()
+   _config->Set("DPkgPM::Progress", "1");
+
    // Parse the command line and initialize the package library
    CommandLine CmdL(Args, _config);
-   if (pkgInitConfig(*_config) == false ||
-       CmdL.Parse(argc, argv) == false ||
+   if (CmdL.Parse(argc, argv) == false ||
        pkgInitSystem(*_config, _system) == false)
    {
       _error->DumpErrors();
