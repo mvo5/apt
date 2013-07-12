@@ -35,7 +35,7 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
-#include <apt-private/private.h>
+#include <apt-private/private-list.h>
 
 #include <cassert>
 #include <locale.h>
