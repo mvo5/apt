@@ -254,10 +254,15 @@ bool AcqTextStatus::Pulse(pkgAcquire *Owner)
    sigprocmask(SIG_SETMASK,&OldSigs,0);
 
    // Draw the current status
+   if (_config->FindB("Apt::Color", false) == true)
+      cout << _config->Find("APT::Color::Yellow");
    if (strlen(Buffer) == strlen(BlankLine))
       cout << '\r' << Buffer << flush;
    else
       cout << '\r' << BlankLine << '\r' << Buffer << flush;
+   if (_config->FindB("Apt::Color", false) == true)
+      cout << _config->Find("APT::Color::Neutral");
+
    memset(BlankLine,' ',strlen(Buffer));
    BlankLine[strlen(Buffer)] = 0;
    
