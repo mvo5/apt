@@ -1718,6 +1718,7 @@ int main(int argc,const char *argv[])					/*{{{*/
       {'t',"target-release","APT::Default-Release",CommandLine::HasArg},
       {'t',"default-release","APT::Default-Release",CommandLine::HasArg},
       {'a',"host-architecture","APT::Get::Host-Architecture",CommandLine::HasArg},
+      {0,"dpkg-progress","DpkgPM::Progress",0},
       {0,"download","APT::Get::Download",0},
       {0,"fix-missing","APT::Get::Fix-Missing",0},
       {0,"ignore-hold","APT::Ignore-Hold",0},      
