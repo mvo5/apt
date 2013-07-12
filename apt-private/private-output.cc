@@ -5,6 +5,7 @@ using namespace std;
 #include <locale.h>
 #include <langinfo.h>
 
+#include <apt-pkg/configuration.h>
 #include <apt-pkg/strutl.h>
 
 #include "private-output.h"
@@ -28,6 +29,26 @@ bool InitOutput()
       c0out.rdbuf(devnull.rdbuf());
    if (_config->FindI("quiet",0) > 1)
       c1out.rdbuf(devnull.rdbuf());
+
+   if(!isatty(1))
+   {
+      _config->Set("APT::Color", "false");
+      _config->Set("APT::Color::Highlight", "");
+      _config->Set("APT::Color::Neutral", "");
+   } else {
+      // Colors
+      _config->CndSet("APT::Color::Highlight", "\x1B[32m");
+      _config->CndSet("APT::Color::Neutral", "\x1B[0m");
+      
+      _config->CndSet("APT::Color::Red", "\x1B[31m");
+      _config->CndSet("APT::Color::Green", "\x1B[32m");
+      _config->CndSet("APT::Color::Yellow", "\x1B[33m");
+      _config->CndSet("APT::Color::Blue", "\x1B[34m");
+      _config->CndSet("APT::Color::Magenta", "\x1B[35m");
+      _config->CndSet("APT::Color::Cyan", "\x1B[36m");
+      _config->CndSet("APT::Color::White", "\x1B[37m");
+   }
+
    return true;
 }
 

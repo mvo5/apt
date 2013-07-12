@@ -81,18 +81,6 @@ bool pkgInitConfig(Configuration &Cnf)
    Cnf.CndSet("Dir::Bin::solvers::","/usr/lib/apt/solvers");
    Cnf.CndSet("Dir::Media::MountPath","/media/apt");
 
-   // Colors
-   Cnf.CndSet("APT::Color::Highlight", "\x1B[32m");
-   Cnf.CndSet("APT::Color::Neutral", "\x1B[0m");
-
-   Cnf.CndSet("APT::Color::Red", "\x1B[31m");
-   Cnf.CndSet("APT::Color::Green", "\x1B[32m");
-   Cnf.CndSet("APT::Color::Yellow", "\x1B[33m");
-   Cnf.CndSet("APT::Color::Blue", "\x1B[34m");
-   Cnf.CndSet("APT::Color::Magenta", "\x1B[35m");
-   Cnf.CndSet("APT::Color::Cyan", "\x1B[36m");
-   Cnf.CndSet("APT::Color::White", "\x1B[37m");
-
    // State   
    Cnf.CndSet("Dir::Log","var/log/apt");
    Cnf.CndSet("Dir::Log::Terminal","term.log");

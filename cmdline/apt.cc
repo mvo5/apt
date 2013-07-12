@@ -158,7 +158,8 @@ int main(int argc,const char *argv[])					/*{{{*/
                                    {"help",&ShowHelp},
                                    {0,0}};
 
-   if(!isatty(1))
+   if(!isatty(1)) 
+   {
       std::cerr << std::endl
                 << "WARNING WARNING "
                 << argv[0]
@@ -166,6 +167,7 @@ int main(int argc,const char *argv[])					/*{{{*/
                 << "use at your own peril^Wrisk"
                 << std::endl
                 << std::endl;
+   }
 
    InitOutput();
 
