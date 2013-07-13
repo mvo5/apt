@@ -1,5 +1,5 @@
-#ifndef APTPRIVATE_PRIVATE_H
-#define APTPRIVATE_PRIVATE_H
+#ifndef APT_PRIVATE_LIST_H
+#define APT_PRIVATE_LIST_H
 
 #include <apt-pkg/cmndline.h>
 

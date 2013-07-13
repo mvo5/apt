@@ -1,3 +1,6 @@
+// Include files							/*{{{*/
+#include<config.h>
+
 #include <apt-pkg/aptconfiguration.h>
 #include <apt-pkg/error.h>
 #include <apt-pkg/cmndline.h>
@@ -25,12 +28,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <apt-pkg/cmndline.h>
-#include <apti18n.h>
-
 #include "private-cachefile.h"
 #include "private-output.h"
 #include "acqprogress.h"
+
+#include <apti18n.h>
+									/*}}}*/
 
 // DoUpdate - Update the package lists					/*{{{*/
 // ---------------------------------------------------------------------

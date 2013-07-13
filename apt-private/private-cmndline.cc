@@ -153,7 +153,8 @@ bool addArgumentsAPTGet(std::vector<CommandLine::Args> &Args, char const * const
       return false;
 
    if (CmdMatches("install", "remove", "purge", "upgrade", "dist-upgrade",
-	    "deselect-upgrade", "autoremove", "clean", "autoclean", "check"))
+	    "deselect-upgrade", "autoremove", "clean", "autoclean", "check",
+	    "build-dep"))
    {
       addArg('s', "simulate", "APT::Get::Simulate", 0);
       addArg('s', "just-print", "APT::Get::Simulate", 0);

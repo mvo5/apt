@@ -1,7 +1,9 @@
-
-#include <apti18n.h>
+#ifndef APT_PRIVATE_CACHESET_H
+#define APT_PRIVATE_CACHESET_H
 
 #include <apt-pkg/cacheset.h>
+
+#include <apti18n.h>
 
 // CacheSetHelperAPTGet - responsible for message telling from the CacheSets/*{{{*/
 class CacheSetHelperAPTGet : public APT::CacheSetHelper {
@@ -184,3 +186,5 @@ public:
 
 };
 									/*}}}*/
+
+#endif

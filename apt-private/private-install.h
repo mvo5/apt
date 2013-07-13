@@ -1,9 +1,12 @@
-#ifndef APTPRIVATE_PRIVATE_INSTALL_H
-#define APTPRIVATE_PRIVATE_INSTALL_H
+#ifndef APT_PRIVATE_INSTALL_H
+#define APT_PRIVATE_INSTALL_H
 
 #include <apt-pkg/cmndline.h>
+
 #include "private-cachefile.h"
 #include "private-output.h"
+
+#include <apti18n.h>
 
 #define RAMFS_MAGIC     0x858458f6
 

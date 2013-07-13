@@ -1,17 +1,22 @@
-#include<iostream>
-
-using namespace std;
-
-#include <locale.h>
-#include <langinfo.h>
+// Include files							/*{{{*/
+#include<config.h>
 
 #include <apt-pkg/configuration.h>
 #include <apt-pkg/strutl.h>
+#include <apt-pkg/error.h>
+
+#include <iostream>
+#include <locale.h>
+#include <langinfo.h>
+#include <unistd.h>
 
 #include "private-output.h"
 #include "private-cachefile.h"
 
 #include <apti18n.h>
+									/*}}}*/
+
+using namespace std;
 
 std::ostream c0out(0);
 std::ostream c1out(0);

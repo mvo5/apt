@@ -1,15 +1,5 @@
-#include <cassert>
-#include <locale.h>
-#include <iostream>
-#include <unistd.h>
-#include <errno.h>
-#include <regex.h>
-#include <stdio.h>
-#include <iomanip>
-#include <algorithm>
-
 // Include Files							/*{{{*/
-#include<config.h>
+#include <config.h>
 
 #include <apt-pkg/error.h>
 #include <apt-pkg/cachefile.h>
@@ -32,10 +22,22 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
-#include <apti18n.h>
-									/*}}}*/
+#include <cassert>
+#include <locale.h>
+#include <iostream>
+#include <unistd.h>
+#include <errno.h>
+#include <regex.h>
+#include <stdio.h>
+#include <iomanip>
+#include <algorithm>
+
+#include "private-cmndline.h"
 #include "private-list.h"
 #include "private-output.h"
+
+#include <apti18n.h>
+									/*}}}*/
 
 struct PackageSortAlphabetic
 {

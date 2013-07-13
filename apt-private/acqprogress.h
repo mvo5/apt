@@ -1,10 +1,9 @@
 // -*- mode: cpp; mode: fold -*-
 // Description								/*{{{*/
-// $Id: acqprogress.h,v 1.5 2003/02/02 22:24:11 jgg Exp $
 /* ######################################################################
 
-   Acquire Progress - Command line progress meter 
-   
+   Acquire Progress - Command line progress meter
+
    ##################################################################### */
 									/*}}}*/
 #ifndef ACQPROGRESS_H

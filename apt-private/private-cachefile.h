@@ -1,7 +1,9 @@
-#ifndef APTPRIVATE_PRIVATE_CACHEFILE_H
-#define APTPRIVATE_PRIVATE_CACHEFILE_H
+#ifndef APT_PRIVATE_CACHEFILE_H
+#define APT_PRIVATE_CACHEFILE_H
 
 #include <apt-pkg/cachefile.h>
+#include <apt-pkg/progress.h>
+
 
 // class CacheFile - Cover class for some dependency cache functions	/*{{{*/
 // ---------------------------------------------------------------------
