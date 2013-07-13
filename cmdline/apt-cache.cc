@@ -36,6 +36,7 @@
 #include <apt-pkg/metaindex.h>
 
 #include <apt-private/private-list.h>
+#include <apt-private/private-cmndline.h>
 
 #include <cassert>
 #include <locale.h>
@@ -1716,38 +1717,10 @@ bool ShowHelp(CommandLine &Cmd)
 									/*}}}*/
 int main(int argc,const char *argv[])					/*{{{*/
 {
-   CommandLine::Args Args[] = {
-      {'h',"help","help",0},
-      {'v',"version","version",0},
-      {'p',"pkg-cache","Dir::Cache::pkgcache",CommandLine::HasArg},
-      {'s',"src-cache","Dir::Cache::srcpkgcache",CommandLine::HasArg},
-      {'q',"quiet","quiet",CommandLine::IntLevel},
-      {'i',"important","APT::Cache::Important",0},
-      {'f',"full","APT::Cache::ShowFull",0},
-      {'g',"generate","APT::Cache::Generate",0},
-      {'a',"all-versions","APT::Cache::AllVersions",0},
-      {'n',"names-only","APT::Cache::NamesOnly",0},
-      {0,"all-names","APT::Cache::AllNames",0},
-      {0,"recurse","APT::Cache::RecurseDepends",0},
-      {'t',"target-release","APT::Default-Release",CommandLine::HasArg},
-      {'t',"default-release","APT::Default-Release",CommandLine::HasArg},
-      {'c',"config-file",0,CommandLine::ConfigFile},
-      {'o',"option",0,CommandLine::ArbItem},
-      {0,"installed","APT::Cache::Installed",0},
-      {0,"pre-depends","APT::Cache::ShowPre-Depends",0},
-      {0,"depends","APT::Cache::ShowDepends",0},
-      {0,"recommends","APT::Cache::ShowRecommends",0},
-      {0,"suggests","APT::Cache::ShowSuggests",0},
-      {0,"replaces","APT::Cache::ShowReplaces",0},
-      {0,"breaks","APT::Cache::ShowBreaks",0},
-      {0,"conflicts","APT::Cache::ShowConflicts",0},
-      {0,"enhances","APT::Cache::ShowEnhances",0},
-      {0,0,0,0}};
-   CommandLine::Dispatch CmdsA[] = {{"help",&ShowHelp},
+   CommandLine::Dispatch Cmds[] =  {{"help",&ShowHelp},
                                     {"gencaches",&GenCaches},
                                     {"showsrc",&ShowSrcPackage},
-                                    {0,0}};
-   CommandLine::Dispatch CmdsB[] = {{"showpkg",&DumpPackage},
+                                    {"showpkg",&DumpPackage},
                                     {"stats",&Stats},
                                     {"dump",&Dump},
                                     {"dumpavail",&DumpAvail},
@@ -1764,12 +1737,14 @@ int main(int argc,const char *argv[])					/*{{{*/
                                     {"madison",&Madison},
                                     {0,0}};
 
+   std::vector<CommandLine::Args> Args = getCommandArgs("apt-cache", CommandLine::GetCommand(Cmds, argc, argv));
+
    // Set up gettext support
    setlocale(LC_ALL,"");
    textdomain(PACKAGE);
 
    // Parse the command line and initialize the package library
-   CommandLine CmdL(Args,_config);
+   CommandLine CmdL(Args.data(),_config);
    if (pkgInitConfig(*_config) == false ||
        CmdL.Parse(argc,argv) == false ||
        pkgInitSystem(*_config,_system) == false)
@@ -1793,8 +1768,8 @@ int main(int argc,const char *argv[])					/*{{{*/
    if (_config->Exists("APT::Cache::Generate") == true)
       _config->Set("pkgCacheFile::Generate", _config->FindB("APT::Cache::Generate", true));
 
-   if (CmdL.DispatchArg(CmdsA,false) == false && _error->PendingError() == false)
-      CmdL.DispatchArg(CmdsB);
+   // Match the operation
+   CmdL.DispatchArg(Cmds);
 
    // Print any errors or warnings found during parsing
    bool const Errors = _error->PendingError();

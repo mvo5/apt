@@ -48,7 +48,7 @@
 #include <apt-private/private-install.h>
 #include <apt-private/private-output.h>
 #include <apt-private/private-update.h>
-#include <apt-private/private-update.h>
+#include <apt-private/private-cmndline.h>
 									/*}}}*/
 
 bool ShowHelp(CommandLine &CmdL)
@@ -143,10 +143,6 @@ bool DoMoo(CommandLine &CmdL)
 
 int main(int argc,const char *argv[])					/*{{{*/
 {
-   CommandLine::Args Args[] = {
-      {0,"installed","APT::Cmd::Installed",0},
-      {0,"upgradable","APT::Cmd::Upgradable",0},
-      {0,0,0,0}};
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    // needs root
                                    {"install",&DoInstall},
@@ -157,6 +153,8 @@ int main(int argc,const char *argv[])					/*{{{*/
                                    {"moo",&DoMoo},
                                    {"help",&ShowHelp},
                                    {0,0}};
+
+   std::vector<CommandLine::Args> Args = getCommandArgs("apt", CommandLine::GetCommand(Cmds, argc, argv));
 
    if(!isatty(1)) 
    {
@@ -186,7 +184,7 @@ int main(int argc,const char *argv[])					/*{{{*/
    _config->Set("Apt::Color", "1");
 
    // Parse the command line and initialize the package library
-   CommandLine CmdL(Args, _config);
+   CommandLine CmdL(Args.data(), _config);
    if (CmdL.Parse(argc, argv) == false ||
        pkgInitSystem(*_config, _system) == false)
    {

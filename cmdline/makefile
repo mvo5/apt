@@ -28,14 +28,14 @@ include $(PROGRAM_H)
 
 # The apt-config program
 PROGRAM=apt-config
-SLIBS = -lapt-pkg $(INTLLIBS)
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
 SOURCE = apt-config.cc
 include $(PROGRAM_H)
 
 # The apt-cdrom program
 PROGRAM=apt-cdrom
-SLIBS = -lapt-pkg $(INTLLIBS)
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
 SOURCE = apt-cdrom.cc 
 include $(PROGRAM_H)
@@ -48,7 +48,7 @@ include $(COPY_H)
 
 # The apt-mark program
 PROGRAM=apt-mark
-SLIBS = -lapt-pkg $(INTLLIBS)
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
 SOURCE = apt-mark.cc
 include $(PROGRAM_H)
