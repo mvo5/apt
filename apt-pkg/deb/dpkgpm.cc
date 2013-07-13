@@ -751,14 +751,17 @@ bool pkgDPkgPM::OpenLog()
 	 return _error->WarningE("OpenLog", _("Could not open file '%s'"), logfile_name.c_str());
       setvbuf(d->term_out, NULL, _IONBF, 0);
       SetCloseExec(fileno(d->term_out), true);
-      struct passwd *pw;
-      struct group *gr;
-      pw = getpwnam("root");
-      gr = getgrnam("adm");
-      if (pw != NULL && gr != NULL)
+      if (getuid() == 0) // if we aren't root, we can't chown a file, so don't try it
       {
-         if(chown(logfile_name.c_str(), pw->pw_uid, gr->gr_gid) < 0)
-            _error->Errno("OpenLog", "chown failed");
+	 struct passwd *pw;
+	 struct group *gr;
+	 pw = getpwnam("root");
+	 gr = getgrnam("adm");
+	 if (pw != NULL && gr != NULL)
+	 {
+	    if(chown(logfile_name.c_str(), pw->pw_uid, gr->gr_gid) < 0)
+	       _error->Errno("OpenLog", "chown failed");
+	 }
       }
       chmod(logfile_name.c_str(), 0640);
       fprintf(d->term_out, "\nLog started: %s\n", timestr);
