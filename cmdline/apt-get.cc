@@ -52,6 +52,7 @@
 
 
 #include <apt-private/private-install.h>
+#include <apt-private/private-upgrade.h>
 #include <apt-private/private-output.h>
 #include <apt-private/private-cacheset.h>
 #include <apt-private/private-update.h>

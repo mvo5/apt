@@ -2,14 +2,16 @@
 #define APTPRIVATE_PRIVATE_INSTALL_H
 
 #include <apt-pkg/cmndline.h>
+#include <apt-pkg/cacheset.h>
+#include <apt-pkg/strutl.h>
+
 #include "private-cachefile.h"
 #include "private-output.h"
+
 
 #define RAMFS_MAGIC     0x858458f6
 
 bool DoInstall(CommandLine &Cmd);
-bool DoUpgradeNoNewPackages(CommandLine &CmdL);
-bool DoUpgradeWithAllowNewPackages(CommandLine &CmdL);
 
 
 bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask = true,
