@@ -56,6 +56,7 @@
 #include <apt-private/private-cacheset.h>
 #include <apt-private/private-update.h>
 #include <apt-private/private-cmndline.h>
+#include <apt-private/private-moo.h>
 
 #include <apt-private/acqprogress.h>
 
@@ -1500,23 +1501,6 @@ bool DoChangelog(CommandLine &CmdL)
    // clenaup tmp dir
    if (tmpdir != NULL)
       rmdir(tmpdir);
-   return true;
-}
-									/*}}}*/
-// DoMoo - Never Ask, Never Tell					/*{{{*/
-// ---------------------------------------------------------------------
-/* */
-bool DoMoo(CommandLine &CmdL)
-{
-   cout << 
-      "         (__) \n"
-      "         (oo) \n"
-      "   /------\\/ \n"
-      "  / |    ||   \n" 
-      " *  /\\---/\\ \n"
-      "    ~~   ~~   \n"
-      "....\"Have you mooed today?\"...\n";
-			    
    return true;
 }
 									/*}}}*/

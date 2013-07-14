@@ -49,6 +49,7 @@
 #include <apt-private/private-output.h>
 #include <apt-private/private-update.h>
 #include <apt-private/private-cmndline.h>
+#include <apt-private/private-moo.h>
 									/*}}}*/
 
 bool ShowHelp(CommandLine &CmdL)
@@ -69,76 +70,6 @@ bool ShowHelp(CommandLine &CmdL)
        );
    
    return true;
-}
-
-#include <sstream>
-bool DoMoo(CommandLine &CmdL)
-{
-   signed short SuperCow = 1;
-   if (CmdL.FileSize() != 0)
-      for (const char **Moo = CmdL.FileList + 1; *Moo != 0; Moo++)
-         if (strcasecmp(*Moo, "moo") == 0)
-            SuperCow++;
-   switch(SuperCow) {
-     case 1:
-      c1out <<
-         "         (__) \n"
-         "         (oo) \n"
-         "   /------\\/ \n"
-         "  / |    ||   \n"
-         " *  /\\---/\\ \n"
-         "    ~~   ~~   \n"
-         "...\"Have you mooed today?\"...\n";
-   break;
-   case 2:
-      // by Fernando Ribeiro in lp:56125
-      c1out <<
-         "         (__)  \n"
-         " _______~(..)~ \n"
-         "   ,----\\(oo) \n"
-         "  /|____|,'    \n"
-         " * /\"\\ /\\   \n"
-         "   ~ ~ ~ ~     \n"
-         "...\"Have you mooed today?\"...\n";
-      break;
-   case 3:
-      c1out << 
-         "        (__)\n"
-         "        (oo)\n"
-         "  /-----(__)\n"
-         " / |   ||   \n"
-         "* /\\---/\\   \n"
-         "  ~~   ~~   \n"
-        "\n";
-      break;
-   case 4:
-      // by Paul TagLiamonte
-      c1out << 
-         "              _     _\n"
-         "             (_\\___( \\,\n"
-         "               )___   _  have you smashed some milk today?\n"
-         "              /( (_)-(_)    /\n"
-         "   ,---------'         \\_\n"
-         " //(  ',__,'      \\  (' ')\n"
-         "//  )              '----'\n"
-         "'' ; \\     .--.  ,/\n"
-         "   | )',_,'----( ;\n"
-         "   ||| '''     '||\n";
-      break;
-   case 5:
-      c1out << 
-         "         [1;97m([0;33m__[1;97m)[0m\n"
-         " [31m_______[33m~([1;34m..[0;33m)~[0m\n"
-         "   [33m,----[31m\\[33m([1;4;35moo[0;33m)[0m\n"
-         "  [33m/|____|,'[0m\n"
-         " [1;5;97m*[0;33m /\\  /\\[0m\n"
-         "[92;42mWwWwWwWwWwWwWwW[0m\n"
-         "[92;42m  ... [1;36mmoo⁈[0;92;42m ... [0m\n"
-         "\n";
-      break;
-   }
-
-    return true;
 }
 
 int main(int argc,const char *argv[])					/*{{{*/

@@ -146,9 +146,11 @@ bool addArgumentsAPTGet(std::vector<CommandLine::Args> &Args, char const * const
       addArg('a', "host-architecture", "APT::Get::Host-Architecture", CommandLine::HasArg);
       addArg(0, "solver", "APT::Solver", CommandLine::HasArg);
    }
-   else if (CmdMatches("clean", "autoclean", "check", "download", "changelog",
-	    "moo") || CmdMatches("markauto", "unmarkauto")) // deprecated commands
+   else if (CmdMatches("clean", "autoclean", "check", "download", "changelog") ||
+	    CmdMatches("markauto", "unmarkauto")) // deprecated commands
       ;
+   else if (CmdMatches("moo"))
+      addArg(0, "color", "APT::Moo::Color", 0);
    else
       return false;
 
