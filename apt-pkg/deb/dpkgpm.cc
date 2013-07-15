@@ -751,14 +751,17 @@ bool pkgDPkgPM::OpenLog()
 	 return _error->WarningE("OpenLog", _("Could not open file '%s'"), logfile_name.c_str());
       setvbuf(d->term_out, NULL, _IONBF, 0);
       SetCloseExec(fileno(d->term_out), true);
-      struct passwd *pw;
-      struct group *gr;
-      pw = getpwnam("root");
-      gr = getgrnam("adm");
-      if (pw != NULL && gr != NULL)
+      if (getuid() == 0) // if we aren't root, we can't chown a file, so don't try it
       {
-         if(chown(logfile_name.c_str(), pw->pw_uid, gr->gr_gid) < 0)
-            _error->Errno("OpenLog", "chown failed");
+	 struct passwd *pw;
+	 struct group *gr;
+	 pw = getpwnam("root");
+	 gr = getgrnam("adm");
+	 if (pw != NULL && gr != NULL)
+	 {
+	    if(chown(logfile_name.c_str(), pw->pw_uid, gr->gr_gid) < 0)
+	       _error->Errno("OpenLog", "chown failed");
+	 }
       }
       chmod(logfile_name.c_str(), 0640);
       fprintf(d->term_out, "\nLog started: %s\n", timestr);
@@ -1252,16 +1255,13 @@ bool pkgDPkgPM::Go(int OutStatusFd)
 
       // if tcgetattr does not return zero there was a error
       // and we do not do any pty magic
+      _error->PushToStack();
       if (tcgetattr(STDOUT_FILENO, &tt) == 0)
       {
 	 ioctl(0, TIOCGWINSZ, (char *)&win);
 	 if (openpty(&master, &slave, NULL, &tt, &win) < 0) 
 	 {
-	    const char *s = _("Can not write log, openpty() "
-	                      "failed (/dev/pts not mounted?)\n");
-	    fprintf(stderr, "%s",s);
-            if(d->term_out)
-              fprintf(d->term_out, "%s",s);
+	    _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
 	    master = slave = -1;
 	 }  else {
 	    struct termios rtt;
@@ -1278,12 +1278,16 @@ bool pkgDPkgPM::Go(int OutStatusFd)
 	    tcsetattr(0, TCSAFLUSH, &rtt);
 	    sigprocmask(SIG_SETMASK, &original_sigmask, 0);
 	 }
-      } else {
-         const char *s = _("Can not write log, tcgetattr() failed for stdout");
-         fprintf(stderr, "%s", s);
-         if(d->term_out)
-            fprintf(d->term_out, "%s",s); 
       }
+      // complain only if stdout is either a terminal (but still failed) or is an invalid
+      // descriptor otherwise we would complain about redirection to e.g. /dev/null as well.
+      else if (isatty(STDOUT_FILENO) == 1 || errno == EBADF)
+         _error->Errno("tcgetattr", _("Can not write log (%s)"), _("Is stdout a terminal?"));
+
+      if (_error->PendingError() == true)
+	 _error->DumpErrors(std::cerr);
+      _error->RevertToStack();
+
        // Fork dpkg
       pid_t Child;
       _config->Set("APT::Keep-Fds::",fd[1]);

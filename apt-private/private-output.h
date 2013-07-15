@@ -1,15 +1,13 @@
-#ifndef APTPRIVATE_PRIVATE_OUTPUT_H
-#define APTPRIVATE_PRIVATE_OUTPUT_H
+#ifndef APT_PRIVATE_OUTPUT_H
+#define APT_PRIVATE_OUTPUT_H
 
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <apt-pkg/depcache.h>
-
-#include <apti18n.h>
 
 // forward declaration
 class CacheFile;
+class pkgDepCache;
 
 extern std::ostream c0out;
 extern std::ostream c1out;

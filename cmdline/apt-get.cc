@@ -56,6 +56,8 @@
 #include <apt-private/private-output.h>
 #include <apt-private/private-cacheset.h>
 #include <apt-private/private-update.h>
+#include <apt-private/private-cmndline.h>
+#include <apt-private/private-moo.h>
 
 #include <apt-private/acqprogress.h>
 
@@ -1503,23 +1505,6 @@ bool DoChangelog(CommandLine &CmdL)
    return true;
 }
 									/*}}}*/
-// DoMoo - Never Ask, Never Tell					/*{{{*/
-// ---------------------------------------------------------------------
-/* */
-bool DoMoo(CommandLine &CmdL)
-{
-   cout << 
-      "         (__) \n"
-      "         (oo) \n"
-      "   /------\\/ \n"
-      "  / |    ||   \n" 
-      " *  /\\---/\\ \n"
-      "    ~~   ~~   \n"
-      "....\"Have you mooed today?\"...\n";
-			    
-   return true;
-}
-									/*}}}*/
 // ShowHelp - Show a help screen					/*{{{*/
 // ---------------------------------------------------------------------
 /* */
@@ -1641,58 +1626,6 @@ bool DoUpgrade(CommandLine &CmdL)
 
 int main(int argc,const char *argv[])					/*{{{*/
 {
-   CommandLine::Args Args[] = {
-      {'h',"help","help",0},
-      {'v',"version","version",0},
-      {'V',"verbose-versions","APT::Get::Show-Versions",0},
-      {'q',"quiet","quiet",CommandLine::IntLevel},
-      {'q',"silent","quiet",CommandLine::IntLevel},
-      {'d',"download-only","APT::Get::Download-Only",0},
-      {'b',"compile","APT::Get::Compile",0},
-      {'b',"build","APT::Get::Compile",0},
-      {'s',"simulate","APT::Get::Simulate",0},
-      {'s',"just-print","APT::Get::Simulate",0},
-      {'s',"recon","APT::Get::Simulate",0},
-      {'s',"dry-run","APT::Get::Simulate",0},
-      {'s',"no-act","APT::Get::Simulate",0},
-      {'y',"yes","APT::Get::Assume-Yes",0},
-      {'y',"assume-yes","APT::Get::Assume-Yes",0},
-      {0,"assume-no","APT::Get::Assume-No",0},
-      {'f',"fix-broken","APT::Get::Fix-Broken",0},
-      {'u',"show-upgraded","APT::Get::Show-Upgraded",0},
-      {'m',"ignore-missing","APT::Get::Fix-Missing",0},
-      {'t',"target-release","APT::Default-Release",CommandLine::HasArg},
-      {'t',"default-release","APT::Default-Release",CommandLine::HasArg},
-      {'a',"host-architecture","APT::Get::Host-Architecture",CommandLine::HasArg},
-      {0,"dpkg-progress","DpkgPM::Progress",0},
-      {0,"download","APT::Get::Download",0},
-      {0,"fix-missing","APT::Get::Fix-Missing",0},
-      {0,"ignore-hold","APT::Ignore-Hold",0},      
-      {0,"upgrade","APT::Get::upgrade",0},
-      {0,"only-upgrade","APT::Get::Only-Upgrade",0},
-      {0,"force-yes","APT::Get::force-yes",0},
-      {0,"print-uris","APT::Get::Print-URIs",0},
-      {0,"diff-only","APT::Get::Diff-Only",0},
-      {0,"debian-only","APT::Get::Diff-Only",0},
-      {0,"tar-only","APT::Get::Tar-Only",0},
-      {0,"dsc-only","APT::Get::Dsc-Only",0},
-      {0,"purge","APT::Get::Purge",0},
-      {0,"list-cleanup","APT::Get::List-Cleanup",0},
-      {0,"reinstall","APT::Get::ReInstall",0},
-      {0,"trivial-only","APT::Get::Trivial-Only",0},
-      {0,"remove","APT::Get::Remove",0},
-      {0,"only-source","APT::Get::Only-Source",0},
-      {0,"arch-only","APT::Get::Arch-Only",0},
-      {0,"auto-remove","APT::Get::AutomaticRemove",0},
-      {0,"allow-new","APT::Get::UpgradeAllowNew",0},
-      {0,"allow-unauthenticated","APT::Get::AllowUnauthenticated",0},
-      {0,"install-recommends","APT::Install-Recommends",CommandLine::Boolean},
-      {0,"install-suggests","APT::Install-Suggests",CommandLine::Boolean},
-      {0,"fix-policy","APT::Get::Fix-Policy-Broken",0},
-      {0,"solver","APT::Solver",CommandLine::HasArg},
-      {'c',"config-file",0,CommandLine::ConfigFile},
-      {'o',"option",0,CommandLine::ArbItem},
-      {0,0,0,0}};
    CommandLine::Dispatch Cmds[] = {{"update",&DoUpdate},
                                    {"upgrade",&DoUpgrade},
                                    {"install",&DoInstall},
@@ -1714,12 +1647,14 @@ int main(int argc,const char *argv[])					/*{{{*/
 				   {"help",&ShowHelp},
                                    {0,0}};
 
+   std::vector<CommandLine::Args> Args = getCommandArgs("apt-get", CommandLine::GetCommand(Cmds, argc, argv));
+
    // Set up gettext support
    setlocale(LC_ALL,"");
    textdomain(PACKAGE);
 
    // Parse the command line and initialize the package library
-   CommandLine CmdL(Args,_config);
+   CommandLine CmdL(Args.data(),_config);
    if (pkgInitConfig(*_config) == false ||
        CmdL.Parse(argc,argv) == false ||
        pkgInitSystem(*_config,_system) == false)

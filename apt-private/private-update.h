@@ -1,4 +1,8 @@
+#ifndef APT_PRIVATE_UPDATE_H
+#define APT_PRIVATE_UPDATE_H
 
-#include <apt-pkg/cmndline.h>
+class CommandLine;
 
 bool DoUpdate(CommandLine &CmdL);
+
+#endif

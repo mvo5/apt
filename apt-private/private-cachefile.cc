@@ -1,11 +1,16 @@
+// Include files							/*{{{*/
+#include<config.h>
+
+#include <apt-pkg/algorithms.h>
+#include <apt-pkg/error.h>
 
 #include <cstdlib>
 
-#include <apt-pkg/algorithms.h>
-#include <apti18n.h>
-
 #include "private-output.h"
 #include "private-cachefile.h"
+
+#include <apti18n.h>
+									/*}}}*/
 
 using namespace std;
 

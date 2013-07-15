@@ -24,11 +24,6 @@
 #include <apt-pkg/pkgrecords.h>
 #include <apt-pkg/indexfile.h>
 
-#include "private-cachefile.h"
-#include "private-output.h"
-#include "private-cacheset.h"
-#include "acqprogress.h"
-
 #include <set>
 #include <locale.h>
 #include <langinfo.h>
@@ -47,6 +42,13 @@
 #include <sstream>
 
 #include "private-install.h"
+#include "private-cachefile.h"
+#include "private-output.h"
+#include "private-cacheset.h"
+#include "acqprogress.h"
+
+#include <apti18n.h>
+									/*}}}*/
 
 // CheckAuth - check if each download comes form a trusted source	/*{{{*/
 // ---------------------------------------------------------------------
