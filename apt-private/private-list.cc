@@ -160,10 +160,9 @@ std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
    return inst ? inst.Arch() : cand.Arch();
 }
 
-std::string GetShortDescription(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+std::string GetShortDescription(pkgCacheFile &CacheFile, pkgRecords &records, pkgCache::PkgIterator P)
 {
    pkgPolicy *policy = CacheFile.GetPolicy();
-   pkgRecords records(CacheFile);
 
    pkgCache::VerIterator ver;
    if (P.CurrentVer())
@@ -182,7 +181,7 @@ std::string GetShortDescription(pkgCacheFile &CacheFile, pkgCache::PkgIterator P
    return ShortDescription;
 }
 
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, pkgCache::PkgIterator P)
 {
    pkgDepCache *DepCache = CacheFile.GetDepCache();
    pkgDepCache::StateCache &state = (*DepCache)[P];
@@ -202,7 +201,7 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
       output = SubstVar(output, "${Version}", GetVersion(CacheFile, P));
 
       // FXIME: this is expensive without locality sort
-      output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, P));
+      output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, records, P));
 
       output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, P));
 
@@ -230,7 +229,7 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
       }
       std::cout << " " << GetArchitecture(CacheFile, P) << " ";
       std::cout << std::endl 
-                << "    " << GetShortDescription(CacheFile, P)
+                << "    " << GetShortDescription(CacheFile, records, P)
                 << std::endl;
    }
 }
@@ -302,11 +301,12 @@ bool List(CommandLine &Cmd)
    }
    
    // output the (now sorted) PackageSet
+   pkgRecords records(CacheFile);
    for (I = bag.begin(); I != bag.end(); ++I)
    {
       pkgCache::DescFile *A = I.TranslatedDescription().FileList();
 
-      ListSinglePackage(CacheFile, I.ParentPkg());
+      ListSinglePackage(CacheFile, records, I.ParentPkg());
    }
 
 
