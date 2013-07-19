@@ -49,7 +49,33 @@ struct PackageSortAlphabetic
        return (l_name < r_name);
     }
 };
-typedef APT::PackageContainer<std::set<pkgCache::PkgIterator, PackageSortAlphabetic> > SortedPackageSet;
+
+struct VersionSortDescriptionLocality
+{
+   bool operator () (const pkgCache::VerIterator &v_lhs, 
+                     const pkgCache::VerIterator &v_rhs)
+    {
+        pkgCache::DescFile *A = v_lhs.TranslatedDescription().FileList();
+        pkgCache::DescFile *B = v_rhs.TranslatedDescription().FileList();
+        if (A == 0 && B == 0)
+           return false;
+
+       if (A == 0)
+          return true;
+
+       if (B == 0)
+          return false;
+
+       if (A->File == B->File)
+          return A->Offset < B->Offset;
+
+       return A->File < B->File;
+    }
+};
+
+typedef APT::VersionContainer<
+   std::set<pkgCache::VerIterator,
+            VersionSortDescriptionLocality> > SortedVersionSet;
 
 
 std::string GetArchiveSuite(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
@@ -174,10 +200,10 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
       output = SubstVar(output, "${installed:Version}", GetInstalledVersion(CacheFile, P));
       output = SubstVar(output, "${candidate:Version}", GetCandidateVersion(CacheFile, P));
       output = SubstVar(output, "${Version}", GetVersion(CacheFile, P));
-#if 0
+
       // FXIME: this is expensive without locality sort
       output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, P));
-#endif
+
       output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, P));
 
       std::cout << output << std::endl;
@@ -220,8 +246,8 @@ bool List(CommandLine &Cmd)
       return false;
 
    std::string pattern;
-   SortedPackageSet bag;
-   SortedPackageSet::const_iterator I = bag.begin();
+   SortedVersionSet bag;
+   SortedVersionSet::const_iterator I = bag.begin();
    const char **patterns;
    const char *all_pattern[] = { "*", NULL};
 
@@ -256,19 +282,20 @@ bool List(CommandLine &Cmd)
          {
             if (P.CurrentVer() != NULL)
             {
-               bag.insert(P);
+               bag.insert(P.CurrentVer());
             }
          }
          else if (_config->FindB("APT::Cmd::Upgradable") == true)
          {
             if(P.CurrentVer() && state.Upgradable())
             {
-               bag.insert(P);
+               bag.insert(P.CurrentVer());
             }
          }
          else 
          {
-            bag.insert(P);
+            pkgPolicy *policy = CacheFile.GetPolicy();
+            bag.insert(policy->GetCandidateVer(P));
          }
       }
       delete cachefilter;
@@ -277,7 +304,9 @@ bool List(CommandLine &Cmd)
    // output the (now sorted) PackageSet
    for (I = bag.begin(); I != bag.end(); ++I)
    {
-      ListSinglePackage(CacheFile, (*I));
+      pkgCache::DescFile *A = I.TranslatedDescription().FileList();
+
+      ListSinglePackage(CacheFile, I.ParentPkg());
    }
 
 
