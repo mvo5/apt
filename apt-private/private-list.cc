@@ -22,6 +22,8 @@
 #include <apt-pkg/indexfile.h>
 #include <apt-pkg/metaindex.h>
 
+#include <sstream>
+#include <utility>
 #include <cassert>
 #include <locale.h>
 #include <iostream>
@@ -50,6 +52,7 @@ struct PackageSortAlphabetic
     }
 };
 
+// FIXME: move into generic code
 struct VersionSortDescriptionLocality
 {
    bool operator () (const pkgCache::VerIterator &v_lhs, 
@@ -73,6 +76,7 @@ struct VersionSortDescriptionLocality
     }
 };
 
+// sorted by locality which makes iterating much faster
 typedef APT::VersionContainer<
    std::set<pkgCache::VerIterator,
             VersionSortDescriptionLocality> > SortedVersionSet;
@@ -181,7 +185,8 @@ std::string GetShortDescription(pkgCacheFile &CacheFile, pkgRecords &records, pk
    return ShortDescription;
 }
 
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, pkgCache::PkgIterator P)
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, 
+                       pkgCache::PkgIterator P, std::ostream &out)
 {
    pkgDepCache *DepCache = CacheFile.GetDepCache();
    pkgDepCache::StateCache &state = (*DepCache)[P];
@@ -205,30 +210,30 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, pkgCache::P
 
       output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, P));
 
-      std::cout << output << std::endl;
+      out << output << std::endl;
    } else {
       // raring/linux-kernel version [upradable: new-version]
       //    description
-      std::cout << std::setiosflags(std::ios::left)
+      out << std::setiosflags(std::ios::left)
                 << suite << "/"
                 << _config->Find("APT::Color::Highlight", "")
                 << name_str
                 << _config->Find("APT::Color::Neutral", "")
                 << " ";
       if(P.CurrentVer() && state.Upgradable()) {
-         std::cout << GetInstalledVersion(CacheFile, P)
+         out << GetInstalledVersion(CacheFile, P)
                    << " "
                    << "[" << _("upgradable: ")
                    << GetCandidateVersion(CacheFile, P) << "]";
       } else if (P.CurrentVer()) {
-         std::cout << GetInstalledVersion(CacheFile, P)
+         out << GetInstalledVersion(CacheFile, P)
                    << " "
                    << _("[installed]");
       } else {
-         std::cout << GetCandidateVersion(CacheFile, P);
+         out << GetCandidateVersion(CacheFile, P);
       }
-      std::cout << " " << GetArchitecture(CacheFile, P) << " ";
-      std::cout << std::endl 
+      out << " " << GetArchitecture(CacheFile, P) << " ";
+      out << std::endl 
                 << "    " << GetShortDescription(CacheFile, records, P)
                 << std::endl;
    }
@@ -241,6 +246,8 @@ bool List(CommandLine &Cmd)
    pkgCacheFile CacheFile;
    pkgCache *Cache = CacheFile.GetPkgCache();
    pkgDepCache *DepCache = CacheFile.GetDepCache();
+   pkgRecords records(CacheFile);
+
    if (unlikely(Cache == NULL))
       return false;
 
@@ -300,15 +307,23 @@ bool List(CommandLine &Cmd)
       delete cachefilter;
    }
    
-   // output the (now sorted) PackageSet
-   pkgRecords records(CacheFile);
+   // go over the locality sorted versions now and add them to a std::map
+   // to get them sorted
+   std::map<std::string, std::string> output_map;
+   std::map<std::string, std::string>::const_iterator K;
    for (I = bag.begin(); I != bag.end(); ++I)
    {
-      pkgCache::DescFile *A = I.TranslatedDescription().FileList();
-
-      ListSinglePackage(CacheFile, records, I.ParentPkg());
+      std::stringstream outs;
+      ListSinglePackage(CacheFile, records, I.ParentPkg(), outs);
+      output_map.insert(
+         std::make_pair<std::string, std::string>(I.ParentPkg().Name(),
+                                                  outs.str()));
    }
-
+   
+   // FIXME: make sorting flexible (alphabetic, by pkg status)
+   // output the sorted map
+   for (K = output_map.begin(); K != output_map.end(); K++)
+      std::cout << (*K).second << std::endl;
 
    return true;
 }
