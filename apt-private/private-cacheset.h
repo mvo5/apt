@@ -40,6 +40,15 @@ typedef APT::VersionContainer<
    std::set<pkgCache::VerIterator,
             VersionSortDescriptionLocality> > LocalitySortedVersionSet;
 
+class Matcher {
+public:
+    virtual bool operator () (const pkgCache::PkgIterator &P) {
+        return true;};
+};
+
+bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
+                                 LocalitySortedVersionSet &output_set,
+                                  Matcher &matcher);
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
                                  LocalitySortedVersionSet &output_set);
 
