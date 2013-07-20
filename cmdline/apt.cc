@@ -45,6 +45,7 @@
 #include <apti18n.h>
 
 #include <apt-private/private-list.h>
+#include <apt-private/private-search.h>
 #include <apt-private/private-install.h>
 #include <apt-private/private-output.h>
 #include <apt-private/private-update.h>
@@ -76,6 +77,7 @@ bool ShowHelp(CommandLine &CmdL)
 int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Dispatch Cmds[] = {{"list",&List},
+                                   {"search", &FullTextSearch},
                                    // needs root
                                    {"install",&DoInstall},
                                    {"remove", &DoInstall},

@@ -3,7 +3,6 @@
 
 #include <apt-pkg/cmndline.h>
 
-bool Dump(CommandLine &Cmd);
 bool List(CommandLine &Cmd);
 
 

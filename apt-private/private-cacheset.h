@@ -1,9 +1,48 @@
 #ifndef APT_PRIVATE_CACHESET_H
 #define APT_PRIVATE_CACHESET_H
 
+#include <apt-pkg/cachefile.h>
 #include <apt-pkg/cacheset.h>
+#include <apt-pkg/sptr.h>
+
+#include <algorithm>
+#include <vector>
+
+#include "private-output.h"
 
 #include <apti18n.h>
+
+struct VersionSortDescriptionLocality
+{
+   bool operator () (const pkgCache::VerIterator &v_lhs, 
+                     const pkgCache::VerIterator &v_rhs)
+    {
+        pkgCache::DescFile *A = v_lhs.TranslatedDescription().FileList();
+        pkgCache::DescFile *B = v_rhs.TranslatedDescription().FileList();
+        if (A == 0 && B == 0)
+           return false;
+
+       if (A == 0)
+          return true;
+
+       if (B == 0)
+          return false;
+
+       if (A->File == B->File)
+          return A->Offset < B->Offset;
+
+       return A->File < B->File;
+    }
+};
+
+// sorted by locality which makes iterating much faster
+typedef APT::VersionContainer<
+   std::set<pkgCache::VerIterator,
+            VersionSortDescriptionLocality> > LocalitySortedVersionSet;
+
+bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
+                                 LocalitySortedVersionSet &output_set);
+
 
 // CacheSetHelperAPTGet - responsible for message telling from the CacheSets/*{{{*/
 class CacheSetHelperAPTGet : public APT::CacheSetHelper {

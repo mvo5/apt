@@ -1,13 +1,20 @@
 #ifndef APT_PRIVATE_OUTPUT_H
 #define APT_PRIVATE_OUTPUT_H
 
+
 #include <iostream>
 #include <fstream>
 #include <string>
 
+#include "private-cachefile.h"
+
 // forward declaration
+class pkgCacheFile;
 class CacheFile;
+class pkgCache;
 class pkgDepCache;
+class pkgRecords;
+
 
 extern std::ostream c0out;
 extern std::ostream c1out;
@@ -16,6 +23,10 @@ extern std::ofstream devnull;
 extern unsigned int ScreenWidth;
 
 bool InitOutput();
+void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, 
+                       pkgCache::PkgIterator P, std::ostream &out);
+
+
 
 bool ShowList(std::ostream &out, std::string Title, std::string List,
               std::string VersionsList);
