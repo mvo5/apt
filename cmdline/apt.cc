@@ -52,6 +52,7 @@
 #include <apt-private/private-cmndline.h>
 #include <apt-private/private-moo.h>
 #include <apt-private/private-upgrade.h>
+#include <apt-private/private-show.h>
 									/*}}}*/
 
 bool ShowHelp(CommandLine &CmdL)
@@ -65,7 +66,10 @@ bool ShowHelp(CommandLine &CmdL)
       "\n"
       "CLI for apt.\n"
       "Commands: \n"
-      " list - list packages\n"
+      " list - list packages based on package names\n"
+      " search - search in package descriptions\n"
+      " show - show package details\n"
+      "\n"
       " update - update list of available packages\n"
       " install - install packages\n"
       " upgrade - upgrade the systems packages\n"
@@ -78,6 +82,7 @@ int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {"search", &FullTextSearch},
+                                   {"show", &ShowPackage},
                                    // needs root
                                    {"install",&DoInstall},
                                    {"remove", &DoInstall},

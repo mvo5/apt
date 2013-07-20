@@ -53,6 +53,30 @@ bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile,
                                  LocalitySortedVersionSet &output_set);
 
 
+// CacheSetHelper saving virtual packages				/*{{{*/
+class CacheSetHelperVirtuals: public APT::CacheSetHelper {
+public:
+   APT::PackageSet virtualPkgs;
+
+   virtual pkgCache::VerIterator canNotFindCandidateVer(pkgCacheFile &Cache, pkgCache::PkgIterator const &Pkg) {
+      virtualPkgs.insert(Pkg);
+      return CacheSetHelper::canNotFindCandidateVer(Cache, Pkg);
+   }
+
+   virtual pkgCache::VerIterator canNotFindNewestVer(pkgCacheFile &Cache, pkgCache::PkgIterator const &Pkg) {
+      virtualPkgs.insert(Pkg);
+      return CacheSetHelper::canNotFindNewestVer(Cache, Pkg);
+   }
+
+   virtual void canNotFindAllVer(APT::VersionContainerInterface * vci, pkgCacheFile &Cache, pkgCache::PkgIterator const &Pkg) {
+      virtualPkgs.insert(Pkg);
+      CacheSetHelper::canNotFindAllVer(vci, Cache, Pkg);
+   }
+
+   CacheSetHelperVirtuals(bool const ShowErrors = true, GlobalError::MsgType const &ErrorType = GlobalError::NOTICE) : CacheSetHelper(ShowErrors, ErrorType) {}
+};
+									/*}}}*/
+
 // CacheSetHelperAPTGet - responsible for message telling from the CacheSets/*{{{*/
 class CacheSetHelperAPTGet : public APT::CacheSetHelper {
 	/** \brief stream message should be printed to */
