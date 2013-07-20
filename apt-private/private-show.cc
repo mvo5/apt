@@ -61,55 +61,25 @@ bool DisplayRecord(pkgCacheFile &CacheFile, pkgCache::VerIterator V)
       return false;
    }
 
-   // Get a pointer to start of Description field
-   const unsigned char *DescP = (unsigned char*)strstr((char*)Buffer, "\nDescription");
-   if (DescP != NULL)
-      ++DescP;
-   else
-      DescP = Buffer + V.FileList()->Size;
-
-   // Write all but Description
-   if (fwrite(Buffer,1,DescP - Buffer,stdout) < (size_t)(DescP - Buffer))
+   pkgTagSection Tags;
+   TFRewriteData RW[] = {{"Description",0},{"Description-md5",0},{}};
+   const char *Zero = 0;
+   if (Tags.Scan((const char*)Buffer,V.FileList()->Size+1) == false ||
+       TFRewrite(stdout,Tags,&Zero,RW) == false)
    {
-      delete [] Buffer;
+      _error->Error("Internal Error, Unable to parse a package record");
       return false;
    }
 
-   // Show the right description
+   // find the write description
    pkgRecords Recs(*Cache);
    pkgCache::DescIterator Desc = V.TranslatedDescription();
    if (Desc.end() == false)
    {
       pkgRecords::Parser &P = Recs.Lookup(Desc.FileList());
       c1out << "Description" << ( (strcmp(Desc.LanguageCode(),"") != 0) ? "-" : "" ) << Desc.LanguageCode() << ": " << P.LongDesc();
-      c1out << std::endl << "Description-md5: " << Desc.md5() << std::endl;
-
-      // Find the first field after the description (if there is any)
-      while ((DescP = (unsigned char*)strchr((char*)DescP, '\n')) != NULL)
-      {
-	 if (DescP[1] == ' ')
-	    DescP += 2;
-	 else if (strncmp((char*)DescP, "\nDescription", strlen("\nDescription")) == 0)
-	    DescP += strlen("\nDescription");
-	 else
-	    break;
-      }
-      if (DescP != NULL)
-	 ++DescP;
    }
-   // if we have no translation, we found a lonely Description-md5, so don't skip it
-
-   if (DescP != NULL)
-   {
-      // write the rest of the buffer
-      const unsigned char *end=&Buffer[V.FileList()->Size];
-      if (fwrite(DescP,1,end-DescP,stdout) < (size_t)(end-DescP))
-      {
-	 delete [] Buffer;
-	 return false;
-      }
-   }
-
+   
    // write a final newline (after the description)
    c1out << std::endl;
    delete [] Buffer;
