@@ -117,7 +117,12 @@ bool List(CommandLine &Cmd)
 
    PackageNameMatcher matcher(patterns);
    LocalitySortedVersionSet bag;
-   GetLocalitySortedVersionSet(CacheFile, bag, matcher);
+   OpTextProgress progress;
+   progress.OverallProgress(0,
+                            Cache->Head().PackageCount, 
+                            Cache->Head().PackageCount,
+                            _("Listing"));
+   GetLocalitySortedVersionSet(CacheFile, bag, matcher, progress);
    LocalitySortedVersionSet::iterator I = bag.begin();
    for ( ;I != bag.end(); I++)
    {

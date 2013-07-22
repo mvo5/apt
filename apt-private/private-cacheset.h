@@ -46,11 +46,14 @@ public:
         return true;};
 };
 
+// FIXME: add default argument for OpProgress (or overloaded function)
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
-                                 LocalitySortedVersionSet &output_set,
-                                  Matcher &matcher);
+                                    LocalitySortedVersionSet &output_set,
+                                    Matcher &matcher,
+                                    OpProgress &progress);
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
-                                 LocalitySortedVersionSet &output_set);
+                                    LocalitySortedVersionSet &output_set,
+                                    OpProgress &progress);
 
 
 // CacheSetHelper saving virtual packages				/*{{{*/

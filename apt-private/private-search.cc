@@ -52,14 +52,24 @@ bool FullTextSearch(CommandLine &CmdL)
    std::map<std::string, std::string>::const_iterator K;
 
    LocalitySortedVersionSet bag;
-   GetLocalitySortedVersionSet(CacheFile, bag);
+   OpTextProgress progress;
+   progress.OverallProgress(0, 100, 50,  _("Sorting"));
+   GetLocalitySortedVersionSet(CacheFile, bag, progress);
    LocalitySortedVersionSet::iterator I = bag.begin();
+
+   progress.OverallProgress(50, 100, 50,  _("Full Text Search"));
+   progress.SubProgress(bag.size());
+   int Done = 0;
    for ( ;I != bag.end(); I++)
    {
+      if (Done%500 == 0)
+         progress.Progress(Done);
+      Done++;
+      
       int i;
       pkgCache::DescIterator Desc = I.TranslatedDescription();
       pkgRecords::Parser &parser = records.Lookup(Desc.FileList());
-      
+     
       bool all_found = true;
       for(i=0; patterns[i] != NULL; i++) 
       {
@@ -78,6 +88,7 @@ bool FullTextSearch(CommandLine &CmdL)
                                  I.ParentPkg().Name(), outs.str()));
       }
    }
+   progress.Done();
 
    // FIXME: SORT! and make sorting flexible (alphabetic, by pkg status)
    // output the sorted map

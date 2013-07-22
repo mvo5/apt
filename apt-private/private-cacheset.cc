@@ -6,21 +6,31 @@
 #include "private-cacheset.h"
 
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
-                                 LocalitySortedVersionSet &output_set)
+                                 LocalitySortedVersionSet &output_set,
+                                 OpProgress &progress)
 {
     Matcher null_matcher = Matcher();
-    return GetLocalitySortedVersionSet(CacheFile, output_set, null_matcher);
+    return GetLocalitySortedVersionSet(CacheFile, output_set, 
+                                       null_matcher, progress);
 }
 
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
                                  LocalitySortedVersionSet &output_set,
-                                 Matcher &matcher)
+                                 Matcher &matcher,
+                                 OpProgress &progress)
 {
    pkgCache *Cache = CacheFile.GetPkgCache();
    pkgDepCache *DepCache = CacheFile.GetDepCache();
 
+   int Done=0;
+   progress.SubProgress(Cache->Head().PackageCount, _("Sorting"));
    for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
    {
+      if (Done%500 == 0)
+         progress.Progress(Done);
+      Done++;
+
+
       if ((matcher)(P) == false)
          continue;
 
@@ -48,5 +58,6 @@ bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile,
          output_set.insert(policy->GetCandidateVer(P));
       }
    }
+   progress.Done();
    return true;
 }
