@@ -179,16 +179,13 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
       output = SubstVar(output, "${installed:Version}", GetInstalledVersion(CacheFile, P));
       output = SubstVar(output, "${candidate:Version}", GetCandidateVersion(CacheFile, P));
       output = SubstVar(output, "${Version}", GetVersion(CacheFile, V));
-
-      // FXIME: this is expensive without locality sort
       output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, records, P));
-
       output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, V));
-
       out << output << std::endl;
    } else {
       // raring/linux-kernel version [upradable: new-version]
       //    description
+      pkgPolicy *policy = CacheFile.GetPolicy();
       out << std::setiosflags(std::ios::left)
                 << suite << "/"
                 << _config->Find("APT::Color::Highlight", "")
@@ -204,6 +201,11 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
          out << GetVersion(CacheFile, V)
                    << " "
                    << _("[installed]");
+      } else if (policy->GetCandidateVer(P) == V && state.Upgradable()) {
+         out << GetVersion(CacheFile, V)
+                   << " "
+                   << _("[installed: ")
+             << GetInstalledVersion(CacheFile, P) << "]";
       } else {
          out << GetVersion(CacheFile, V);
       }
