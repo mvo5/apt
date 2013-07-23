@@ -82,7 +82,7 @@ int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {"search", &FullTextSearch},
-                                   {"show", &ShowPackage},
+                                   {"show", &APT::Cmd::ShowPackage},
                                    // needs root
                                    {"install",&DoInstall},
                                    {"remove", &DoInstall},
