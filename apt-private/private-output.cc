@@ -199,15 +199,30 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
              << GetCandidateVersion(CacheFile, P) << "]";
       } else if (P.CurrentVer() == V) {
          out << GetVersion(CacheFile, V)
-             << " "
-             << _("[installed]");
-      } else if (policy->GetCandidateVer(P) == V && state.Upgradable()) {
+             << " ";
+         if(!V.Downloadable())
+            out << _("[installed,local]");
+         else
+            if(V.Automatic() && state.Garbage)
+                  out << _("[installed,auto-removable]");
+            else if (state.Flags & pkgCache::Flag::Auto)
+               out << _("[installed,automatic]");
+            else
+               out << _("[installed]");
+      } else if (P.CurrentVer() && 
+                 policy->GetCandidateVer(P) == V && 
+                 state.Upgradable()) {
          out << GetVersion(CacheFile, V)
              << " "
              << _("[installed: ")
              << GetInstalledVersion(CacheFile, P) << "]";
       } else {
-         out << GetVersion(CacheFile, V);
+         if (V.ParentPkg()->CurrentState == pkgCache::State::ConfigFiles)
+            out << GetVersion(CacheFile, V) 
+                << " "
+                << _("[residual-config]");
+         else
+            out << GetVersion(CacheFile, V);
       }
       out << " " << GetArchitecture(CacheFile, P) << " ";
       out << std::endl 
