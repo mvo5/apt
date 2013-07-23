@@ -110,23 +110,21 @@ std::string GetInstalledVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P
    return inst ? inst.VerStr() : "(none)";
 }
 
-std::string GetVersion(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+std::string GetVersion(pkgCacheFile &CacheFile, pkgCache::VerIterator V)
 {
-   pkgCache::VerIterator inst = P.CurrentVer();
-   if (inst)
+   pkgCache::PkgIterator P = V.ParentPkg();
+   if (V == P.CurrentVer())
    {
       pkgDepCache *DepCache = CacheFile.GetDepCache();
       pkgDepCache::StateCache &state = (*DepCache)[P];
-      std::string inst_str = DeNull(inst.VerStr());
+      std::string inst_str = DeNull(V.VerStr());
       if (state.Upgradable())
          return "**"+inst_str;
       return inst_str;
    }
 
-   pkgPolicy *policy = CacheFile.GetPolicy();
-   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
-   if(cand)
-      return DeNull(cand.VerStr());
+   if(V)
+      return DeNull(V.VerStr());
    return "(none)";
 }
 
@@ -180,7 +178,7 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
       output = SubstVar(output, "${Package}", name_str);
       output = SubstVar(output, "${installed:Version}", GetInstalledVersion(CacheFile, P));
       output = SubstVar(output, "${candidate:Version}", GetCandidateVersion(CacheFile, P));
-      output = SubstVar(output, "${Version}", GetVersion(CacheFile, P));
+      output = SubstVar(output, "${Version}", GetVersion(CacheFile, V));
 
       // FXIME: this is expensive without locality sort
       output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, records, P));
@@ -197,17 +195,17 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
                 << name_str
                 << _config->Find("APT::Color::Neutral", "")
                 << " ";
-      if(P.CurrentVer() && state.Upgradable()) {
-         out << GetInstalledVersion(CacheFile, P)
+      if(P.CurrentVer() == V && state.Upgradable()) {
+         out << GetVersion(CacheFile, V)
                    << " "
                    << "[" << _("upgradable: ")
                    << GetCandidateVersion(CacheFile, P) << "]";
-      } else if (P.CurrentVer()) {
-         out << GetInstalledVersion(CacheFile, P)
+      } else if (P.CurrentVer() == V) {
+         out << GetVersion(CacheFile, V)
                    << " "
                    << _("[installed]");
       } else {
-         out << GetCandidateVersion(CacheFile, P);
+         out << GetVersion(CacheFile, V);
       }
       out << " " << GetArchitecture(CacheFile, P) << " ";
       out << std::endl 

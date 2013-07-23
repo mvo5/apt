@@ -91,6 +91,21 @@ private:
 };
 
 
+void ListAllVersions(pkgCacheFile &CacheFile, pkgRecords &records, 
+                     pkgCache::PkgIterator P,    
+                     std::map<std::string, std::string> &output_map)
+{
+   for (pkgCache::VerIterator Ver = P.VersionList();
+        Ver.end() == false; Ver++) 
+   {
+      std::stringstream outs;
+      ListSingleVersion(CacheFile, records, Ver, outs);
+      std::string sort_key = Ver.ParentPkg().Name() + std::string("/") + Ver.VerStr();
+      output_map.insert(std::make_pair<std::string, std::string>(
+                           sort_key, outs.str()));
+   }
+}
+
 // list - list package based on criteria        			/*{{{*/
 // ---------------------------------------------------------------------
 bool List(CommandLine &Cmd)
@@ -123,13 +138,17 @@ bool List(CommandLine &Cmd)
                             Cache->Head().PackageCount,
                             _("Listing"));
    GetLocalitySortedVersionSet(CacheFile, bag, matcher, progress);
-   LocalitySortedVersionSet::iterator V = bag.begin();
-   for ( ;V != bag.end(); V++)
+   for (LocalitySortedVersionSet::iterator V = bag.begin(); V != bag.end(); V++)
    {
       std::stringstream outs;
-      ListSingleVersion(CacheFile, records, V, outs);
-      output_map.insert(std::make_pair<std::string, std::string>(
+      if(_config->FindB("APT::Cmd::AllVersions", false) == true)
+      {
+         ListAllVersions(CacheFile, records, V.ParentPkg(), output_map);
+      } else {
+         ListSingleVersion(CacheFile, records, V, outs);
+         output_map.insert(std::make_pair<std::string, std::string>(
                            V.ParentPkg().Name(), outs.str()));
+      }
    }
 
    // FIXME: SORT! and make sorting flexible (alphabetic, by pkg status)
