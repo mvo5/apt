@@ -55,19 +55,19 @@ bool FullTextSearch(CommandLine &CmdL)
    OpTextProgress progress;
    progress.OverallProgress(0, 100, 50,  _("Sorting"));
    GetLocalitySortedVersionSet(CacheFile, bag, progress);
-   LocalitySortedVersionSet::iterator I = bag.begin();
+   LocalitySortedVersionSet::iterator V = bag.begin();
 
    progress.OverallProgress(50, 100, 50,  _("Full Text Search"));
    progress.SubProgress(bag.size());
    int Done = 0;
-   for ( ;I != bag.end(); I++)
+   for ( ;V != bag.end(); V++)
    {
       if (Done%500 == 0)
          progress.Progress(Done);
       Done++;
       
       int i;
-      pkgCache::DescIterator Desc = I.TranslatedDescription();
+      pkgCache::DescIterator Desc = V.TranslatedDescription();
       pkgRecords::Parser &parser = records.Lookup(Desc.FileList());
      
       bool all_found = true;
@@ -76,16 +76,16 @@ bool FullTextSearch(CommandLine &CmdL)
          // FIXME: use regexp instead of simple find()
          const char *pattern = patterns[i];
          all_found &=  (
-            strstr(I.ParentPkg().Name(), pattern) != NULL ||
+            strstr(V.ParentPkg().Name(), pattern) != NULL ||
             parser.ShortDesc().find(pattern) != std::string::npos ||
             parser.LongDesc().find(pattern) != std::string::npos);
       }
       if (all_found)
       {
             std::stringstream outs;
-            ListSinglePackage(CacheFile, records, I.ParentPkg(), outs);
+            ListSingleVersion(CacheFile, records, V, outs);
             output_map.insert(std::make_pair<std::string, std::string>(
-                                 I.ParentPkg().Name(), outs.str()));
+                                 V.ParentPkg().Name(), outs.str()));
       }
    }
    progress.Done();
@@ -94,5 +94,6 @@ bool FullTextSearch(CommandLine &CmdL)
    // output the sorted map
    for (K = output_map.begin(); K != output_map.end(); K++)
       std::cout << (*K).second << std::endl;
-   
+
+   return true;
 }

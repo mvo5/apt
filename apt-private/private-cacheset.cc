@@ -30,7 +30,6 @@ bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile,
          progress.Progress(Done);
       Done++;
 
-
       if ((matcher)(P) == false)
          continue;
 

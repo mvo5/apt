@@ -61,12 +61,8 @@ bool InitOutput()
    return true;
 }
 
-std::string GetArchiveSuite(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)
+std::string GetArchiveSuite(pkgCacheFile &CacheFile, pkgCache::VerIterator ver)
 {
-   pkgPolicy *policy = CacheFile.GetPolicy();
-   pkgCache::VerIterator cand = policy->GetCandidateVer(P);
-
-   pkgCache::VerIterator ver = cand;
    std::string suite = "";
    if (ver && ver.FileList() && ver.FileList())
    {
@@ -164,13 +160,15 @@ std::string GetShortDescription(pkgCacheFile &CacheFile, pkgRecords &records, pk
    return ShortDescription;
 }
 
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, 
-                       pkgCache::PkgIterator P, std::ostream &out)
+void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records, 
+                       pkgCache::VerIterator V, std::ostream &out)
 {
+   pkgCache::PkgIterator P = V.ParentPkg();
+
    pkgDepCache *DepCache = CacheFile.GetDepCache();
    pkgDepCache::StateCache &state = (*DepCache)[P];
 
-   std::string suite = GetArchiveSuite(CacheFile, P);
+   std::string suite = GetArchiveSuite(CacheFile, V);
    std::string name_str = P.Name();
 
    if (_config->FindB("APT::Cmd::use-format", false))
@@ -187,7 +185,7 @@ void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records,
       // FXIME: this is expensive without locality sort
       output = SubstVar(output, "${Description}", GetShortDescription(CacheFile, records, P));
 
-      output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, P));
+      output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, V));
 
       out << output << std::endl;
    } else {

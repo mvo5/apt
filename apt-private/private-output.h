@@ -23,8 +23,8 @@ extern std::ofstream devnull;
 extern unsigned int ScreenWidth;
 
 bool InitOutput();
-void ListSinglePackage(pkgCacheFile &CacheFile, pkgRecords &records, 
-                       pkgCache::PkgIterator P, std::ostream &out);
+void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records, 
+                       pkgCache::VerIterator V, std::ostream &out);
 
 
 

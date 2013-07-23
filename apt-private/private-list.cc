@@ -123,13 +123,13 @@ bool List(CommandLine &Cmd)
                             Cache->Head().PackageCount,
                             _("Listing"));
    GetLocalitySortedVersionSet(CacheFile, bag, matcher, progress);
-   LocalitySortedVersionSet::iterator I = bag.begin();
-   for ( ;I != bag.end(); I++)
+   LocalitySortedVersionSet::iterator V = bag.begin();
+   for ( ;V != bag.end(); V++)
    {
       std::stringstream outs;
-      ListSinglePackage(CacheFile, records, I.ParentPkg(), outs);
+      ListSingleVersion(CacheFile, records, V, outs);
       output_map.insert(std::make_pair<std::string, std::string>(
-                           I.ParentPkg().Name(), outs.str()));
+                           V.ParentPkg().Name(), outs.str()));
    }
 
    // FIXME: SORT! and make sorting flexible (alphabetic, by pkg status)
