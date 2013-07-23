@@ -3,6 +3,10 @@
 
 #include <apt-pkg/cmndline.h>
 
-bool ShowPackage(CommandLine &CmdL);
+namespace APT {
+   namespace Cmd {
 
+      bool ShowPackage(CommandLine &CmdL);
+   }
+}
 #endif

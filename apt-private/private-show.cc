@@ -24,11 +24,13 @@
 #include "private-output.h"
 #include "private-cacheset.h"
 
+namespace APT {
+   namespace Cmd {
+
 // DisplayRecord - Displays the complete record for the package		/*{{{*/
 // ---------------------------------------------------------------------
-/* This displays the package record from the proper package index file. 
-   It is not used by DumpAvail for performance reasons. */
-bool DisplayRecord(pkgCacheFile &CacheFile, pkgCache::VerIterator V)
+bool DisplayRecord(pkgCacheFile &CacheFile, pkgCache::VerIterator V,
+                   ostream &out)
 {
    pkgCache *Cache = CacheFile.GetPkgCache();
    if (unlikely(Cache == NULL))
@@ -47,60 +49,63 @@ bool DisplayRecord(pkgCacheFile &CacheFile, pkgCache::VerIterator V)
    if (I.IsOk() == false)
       return _error->Error(_("Package file %s is out of sync."),I.FileName());
 
+   // Read the record
    FileFd PkgF;
    if (PkgF.Open(I.FileName(), FileFd::ReadOnly, FileFd::Extension) == false)
       return false;
-
-   // Read the record
-   unsigned char *Buffer = new unsigned char[Cache->HeaderP->MaxVerFileSize+1];
-   Buffer[V.FileList()->Size] = '\n';
-   if (PkgF.Seek(V.FileList()->Offset) == false ||
-       PkgF.Read(Buffer,V.FileList()->Size) == false)
-   {
-      delete [] Buffer;
-      return false;
-   }
-
    pkgTagSection Tags;
-   TFRewriteData RW[] = {{"Description",0},{"Description-md5",0},{}};
+   pkgTagFile TagF(&PkgF);
+   
+   TFRewriteData RW[] = {
+      {"Conffiles",0},
+      {"Description",0},
+      {"Description-md5",0},
+      {}
+   };
    const char *Zero = 0;
-   if (Tags.Scan((const char*)Buffer,V.FileList()->Size+1) == false ||
+   if (TagF.Jump(Tags, V.FileList()->Offset) == false ||
        TFRewrite(stdout,Tags,&Zero,RW) == false)
    {
       _error->Error("Internal Error, Unable to parse a package record");
       return false;
    }
 
-   // find the write description
+   // write the description
    pkgRecords Recs(*Cache);
    pkgCache::DescIterator Desc = V.TranslatedDescription();
    if (Desc.end() == false)
    {
       pkgRecords::Parser &P = Recs.Lookup(Desc.FileList());
-      c1out << "Description" << ( (strcmp(Desc.LanguageCode(),"") != 0) ? "-" : "" ) << Desc.LanguageCode() << ": " << P.LongDesc();
+      if (strcmp(Desc.LanguageCode(),"") != 0)
+         out << "Description-lang: " << Desc.LanguageCode() << std::endl;
+      out << "Description" << P.LongDesc();
    }
    
    // write a final newline (after the description)
-   c1out << std::endl;
-   delete [] Buffer;
+   out << std::endl;
 
    return true;
 }
 									/*}}}*/
 
-// ShowPackage - Dump the package record to the screen			/*{{{*/
-// ---------------------------------------------------------------------
-/* */
 bool ShowPackage(CommandLine &CmdL)
 {
    pkgCacheFile CacheFile;
    CacheSetHelperVirtuals helper(true, GlobalError::NOTICE);
-   APT::VersionList::Version const select = _config->FindB("APT::Cache::AllVersions", true) ?
-			APT::VersionList::ALL : APT::VersionList::CANDIDATE;
+   APT::VersionList::Version const select = APT::VersionList::CANDIDATE;
    APT::VersionList const verset = APT::VersionList::FromCommandLine(CacheFile, CmdL.FileList + 1, select, helper);
    for (APT::VersionList::const_iterator Ver = verset.begin(); Ver != verset.end(); ++Ver)
-      if (DisplayRecord(CacheFile, Ver) == false)
+      if (DisplayRecord(CacheFile, Ver, c1out) == false)
 	 return false;
+
+   for (APT::PackageSet::const_iterator Pkg = helper.virtualPkgs.begin();
+	Pkg != helper.virtualPkgs.end(); ++Pkg)
+   {
+       c1out << "Package: " << Pkg.FullName(true) << std::endl;
+       c1out << "State: " << _("not a real pacakge (virtual)") << std::endl;
+       // FIXME: show providers, see private-cacheset.h
+       //        CacheSetHelperAPTGet::showVirtualPackageErrors()
+   }
 
    if (verset.empty() == true)
    {
@@ -109,6 +114,9 @@ bool ShowPackage(CommandLine &CmdL)
       else
         _error->Notice(_("No packages found"));
    }
+
    return true;
 }
 									/*}}}*/
+} // namespace Cmd
+} // namespace APT
