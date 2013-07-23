@@ -187,24 +187,24 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
       //    description
       pkgPolicy *policy = CacheFile.GetPolicy();
       out << std::setiosflags(std::ios::left)
-                << suite << "/"
-                << _config->Find("APT::Color::Highlight", "")
-                << name_str
-                << _config->Find("APT::Color::Neutral", "")
-                << " ";
+          << _config->Find("APT::Color::Highlight", "")
+          << name_str 
+          << _config->Find("APT::Color::Neutral", "")
+          << "/" << suite
+          << " ";
       if(P.CurrentVer() == V && state.Upgradable()) {
          out << GetVersion(CacheFile, V)
-                   << " "
-                   << "[" << _("upgradable: ")
-                   << GetCandidateVersion(CacheFile, P) << "]";
+             << " "
+             << "[" << _("upgradable: ")
+             << GetCandidateVersion(CacheFile, P) << "]";
       } else if (P.CurrentVer() == V) {
          out << GetVersion(CacheFile, V)
-                   << " "
-                   << _("[installed]");
+             << " "
+             << _("[installed]");
       } else if (policy->GetCandidateVer(P) == V && state.Upgradable()) {
          out << GetVersion(CacheFile, V)
-                   << " "
-                   << _("[installed: ")
+             << " "
+             << _("[installed: ")
              << GetInstalledVersion(CacheFile, P) << "]";
       } else {
          out << GetVersion(CacheFile, V);
