@@ -93,17 +93,11 @@ private:
 
 void ListAllVersions(pkgCacheFile &CacheFile, pkgRecords &records, 
                      pkgCache::PkgIterator P,    
-                     std::map<std::string, std::string> &output_map)
+                     std::ostream &outs)
 {
    for (pkgCache::VerIterator Ver = P.VersionList();
         Ver.end() == false; Ver++) 
-   {
-      std::stringstream outs;
       ListSingleVersion(CacheFile, records, Ver, outs);
-      std::string sort_key = Ver.ParentPkg().Name() + std::string("/") + Ver.VerStr();
-      output_map.insert(std::make_pair<std::string, std::string>(
-                           sort_key, outs.str()));
-   }
 }
 
 // list - list package based on criteria        			/*{{{*/
@@ -143,7 +137,9 @@ bool List(CommandLine &Cmd)
       std::stringstream outs;
       if(_config->FindB("APT::Cmd::AllVersions", false) == true)
       {
-         ListAllVersions(CacheFile, records, V.ParentPkg(), output_map);
+         ListAllVersions(CacheFile, records, V.ParentPkg(), outs);
+         output_map.insert(std::make_pair<std::string, std::string>(
+            V.ParentPkg().Name(), outs.str()));
       } else {
          ListSingleVersion(CacheFile, records, V, outs);
          output_map.insert(std::make_pair<std::string, std::string>(
