@@ -141,5 +141,13 @@ int main(int argc,const char *argv[])					/*{{{*/
    }
 
    CmdL.DispatchArg(Cmds);
+
+   // Print any errors or warnings found during parsing
+   bool const Errors = _error->PendingError();
+   if (_config->FindI("quiet",0) > 0)
+      _error->DumpErrors();
+   else
+      _error->DumpErrors(GlobalError::DEBUG);
+   return Errors == true ? 100 : 0;
 }
 									/*}}}*/
