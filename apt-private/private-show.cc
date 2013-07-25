@@ -82,7 +82,7 @@ bool DisplayRecord(pkgCacheFile &CacheFile, pkgCache::VerIterator V,
    }
    
    // write a final newline (after the description)
-   out << std::endl;
+   out << std::endl << std::endl;
 
    return true;
 }
