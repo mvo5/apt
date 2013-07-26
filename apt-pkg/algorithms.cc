@@ -431,6 +431,7 @@ bool pkgAllUpgrade(pkgDepCache &Cache)
 {
    return pkgAllUpgrade(Cache, false);
 }
+
 bool pkgAllUpgrade(pkgDepCache &Cache, bool auto_install)
 {
    std::string const solver = _config->Find("APT::Solver", "internal");
@@ -438,7 +439,6 @@ bool pkgAllUpgrade(pkgDepCache &Cache, bool auto_install)
       OpTextProgress Prog(*_config);
       return EDSP::ResolveExternal(solver.c_str(), Cache, true, false, false, &Prog);
    }
-
    pkgDepCache::ActionGroup group(Cache);
 
    pkgProblemResolver Fix(&Cache);
@@ -455,9 +455,8 @@ bool pkgAllUpgrade(pkgDepCache &Cache, bool auto_install)
       if (_config->FindB("APT::Ignore-Hold",false) == false)
 	 if (I->SelectedState == pkgCache::State::Hold)
 	    continue;
-      
       if (I->CurrentVer != 0 && Cache[I].InstallVer != 0)
-	 Cache.MarkInstall(I, auto_install, 0, false);
+	 Cache.MarkInstall(I, auto_install, 0, false, false, true);
    }
       
    return Fix.ResolveByKeep();

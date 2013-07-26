@@ -1030,7 +1030,7 @@ struct CompareProviders {
 };
 bool pkgDepCache::MarkInstall(PkgIterator const &Pkg,bool AutoInst,
 			      unsigned long Depth, bool FromUser,
-			      bool ForceImportantDeps)
+			      bool ForceImportantDeps, bool NoDelete)
 {
    if (IsModeChangeOk(ModeInstall, Pkg, Depth, FromUser) == false)
       return false;
@@ -1048,7 +1048,12 @@ bool pkgDepCache::MarkInstall(PkgIterator const &Pkg,bool AutoInst,
 	P.CandidateVer == (Version *)Pkg.CurrentVer()))
    {
       if (P.CandidateVer == (Version *)Pkg.CurrentVer() && P.InstallVer == 0)
-	 return MarkKeep(Pkg, false, FromUser, Depth+1);
+      {
+         if (NoDelete)
+            return MarkKeep(Pkg, false, FromUser, Depth+1);
+         else
+            return MarkDelete(Pkg, false, FromUser, Depth+1);
+      }
       return true;
    }
 
@@ -1134,7 +1139,7 @@ bool pkgDepCache::MarkInstall(PkgIterator const &Pkg,bool AutoInst,
 	 if (Start.IsCritical() == false)
 	    continue;
 	 // if the dependency was critical, we can't install it, so remove it again
-	 MarkDelete(Pkg,false,Depth + 1, false);
+	 MarkKeep(Pkg,false,Depth + 1, false);
 	 return false;
       }
 
@@ -1264,8 +1269,14 @@ bool pkgDepCache::MarkInstall(PkgIterator const &Pkg,bool AutoInst,
                   std::clog << OutputInDepth(Depth) 
                             << " Removing: " << Pkg.Name()
                             << std::endl;
-               if (MarkDelete(Pkg,false,Depth + 1, false) == false)
-                  break;
+               if (NoDelete)
+               {
+                  if (MarkKeep(Pkg,false,Depth + 1, false) == false)
+                     break;
+               } else {
+                  if (MarkDelete(Pkg,false,Depth + 1, false) == false)
+                     break;
+               }
             }
 	 }
 	 continue;
