@@ -53,6 +53,7 @@
 #include <apt-private/private-moo.h>
 #include <apt-private/private-upgrade.h>
 #include <apt-private/private-show.h>
+#include <apt-private/private-main.h>
 									/*}}}*/
 
 bool ShowHelp(CommandLine &CmdL)
@@ -78,7 +79,7 @@ bool ShowHelp(CommandLine &CmdL)
    return true;
 }
 
-int main(int argc,const char *argv[])					/*{{{*/
+int main(int argc, const char *argv[])					/*{{{*/
 {
    CommandLine::Dispatch Cmds[] = {{"list",&List},
                                    {"search", &FullTextSearch},
@@ -140,6 +141,10 @@ int main(int argc,const char *argv[])					/*{{{*/
       return 0;
    }
 
+   // see if we are in simulate mode
+   CheckSimulateMode(CmdL);
+
+   // parse args
    CmdL.DispatchArg(Cmds);
 
    // Print any errors or warnings found during parsing

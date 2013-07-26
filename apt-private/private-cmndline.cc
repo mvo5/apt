@@ -151,8 +151,6 @@ bool addArgumentsAPTGet(std::vector<CommandLine::Args> &Args, char const * const
       ;
    else if (CmdMatches("moo"))
       addArg(0, "color", "APT::Moo::Color", 0);
-   else
-      return false;
 
    if (CmdMatches("install", "remove", "purge", "upgrade", "dist-upgrade",
 	    "deselect-upgrade", "autoremove", "clean", "autoclean", "check",
