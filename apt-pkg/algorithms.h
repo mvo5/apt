@@ -144,8 +144,9 @@ bool pkgDistUpgrade(pkgDepCache &Cache);
 bool pkgApplyStatus(pkgDepCache &Cache);
 bool pkgFixBroken(pkgDepCache &Cache);
 
-bool pkgAllUpgrade(pkgDepCache &Cache, bool do_auto_install);
 bool pkgAllUpgrade(pkgDepCache &Cache);
+
+bool pkgAllUpgradeNoDelete(pkgDepCache &Cache);
 
 bool pkgMinimizeUpgrade(pkgDepCache &Cache);
 

@@ -36,7 +36,7 @@ bool DoUpgradeWithAllowNewPackages(CommandLine &CmdL)
       return false;
 
    // Do the upgrade
-   if (pkgAllUpgrade(Cache, true) == false)
+   if (pkgAllUpgradeNoDelete(Cache) == false)
    {
       ShowBroken(c1out,Cache,false);
       return _error->Error(_("Internal error, AllUpgrade broke stuff"));
