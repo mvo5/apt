@@ -244,17 +244,20 @@ int GetLock(string File,bool Errors)
    fl.l_len = 0;
    if (fcntl(FD,F_SETLK,&fl) == -1)
    {
+      // always close to not leak resources
+      int Tmp = errno;
+      close(FD);
+      errno = Tmp;
+
       if (errno == ENOLCK)
       {
 	 _error->Warning(_("Not using locking for nfs mounted lock file %s"),File.c_str());
 	 return dup(0);       // Need something for the caller to close	 
-      }      
+      }
+  
       if (Errors == true)
 	 _error->Errno("open",_("Could not get lock %s"),File.c_str());
       
-      int Tmp = errno;
-      close(FD);
-      errno = Tmp;
       return -1;
    }
 
@@ -1218,11 +1221,9 @@ FileFd::~FileFd()
 {
    Close();
    if (d != NULL)
-   {
       d->CloseDown(FileName);
-      delete d;
-      d = NULL;
-   }
+   delete d;
+   d = NULL;
 }
 									/*}}}*/
 // FileFd::Read - Read a bit of the file				/*{{{*/
@@ -1598,7 +1599,11 @@ unsigned long long FileFd::Size()
       char ignore[1000];
       unsigned long long read = 0;
       do {
-	 Read(ignore, sizeof(ignore), &read);
+	 if (Read(ignore, sizeof(ignore), &read) == false)
+	 {
+	    Seek(oldSeek);
+	    return 0;
+	 }
       } while(read != 0);
       size = Tell();
       Seek(oldSeek);
@@ -1615,10 +1620,16 @@ unsigned long long FileFd::Size()
 	* bits of the file */
        // FIXME: Size for gz-files is limited by 32bit… no largefile support
        if (lseek(iFd, -4, SEEK_END) < 0)
-	  return FileFdErrno("lseek","Unable to seek to end of gzipped file");
-       size = 0L;
+       {
+	  FileFdErrno("lseek","Unable to seek to end of gzipped file");
+	  return 0;
+       }
+       size = 0;
        if (read(iFd, &size, 4) != 4)
-	  return FileFdErrno("read","Unable to read original size of gzipped file");
+       {
+	  FileFdErrno("read","Unable to read original size of gzipped file");
+	  return 0;
+       }
 
 #ifdef WORDS_BIGENDIAN
        uint32_t tmp_size = size;
@@ -1628,7 +1639,10 @@ unsigned long long FileFd::Size()
 #endif
 
        if (lseek(iFd, oldPos, SEEK_SET) < 0)
-	  return FileFdErrno("lseek","Unable to seek in gzipped file");
+       {
+	  FileFdErrno("lseek","Unable to seek in gzipped file");
+	  return 0;
+       }
 
        return size;
    }
