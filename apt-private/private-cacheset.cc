@@ -48,7 +48,8 @@ bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile,
       {
          if(P.CurrentVer() && state.Upgradable())
          {
-            output_set.insert(P.CurrentVer());
+             pkgPolicy *policy = CacheFile.GetPolicy();
+             output_set.insert(policy->GetCandidateVer(P));
          }
       }
       else 

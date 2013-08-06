@@ -195,7 +195,7 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
       if(P.CurrentVer() == V && state.Upgradable()) {
          out << GetVersion(CacheFile, V)
              << " "
-             << "[" << _("upgradable: ")
+             << "[" << _("installed,upgradable to: ")
              << GetCandidateVersion(CacheFile, P) << "]";
       } else if (P.CurrentVer() == V) {
          out << GetVersion(CacheFile, V)
@@ -214,7 +214,7 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,
                  state.Upgradable()) {
          out << GetVersion(CacheFile, V)
              << " "
-             << _("[installed: ")
+             << _("[upgradable from: ")
              << GetInstalledVersion(CacheFile, P) << "]";
       } else {
          if (V.ParentPkg()->CurrentState == pkgCache::State::ConfigFiles)
