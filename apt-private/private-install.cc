@@ -80,7 +80,7 @@ static bool CheckAuth(pkgAcquire& Fetcher)
    if (_config->FindI("quiet",0) < 2
        && _config->FindB("APT::Get::Assume-Yes",false) == false)
    {
-      c2out << _("Install these packages without verification [y/N]? ") << std::flush;
+      c2out << _("Install these packages without verification?") << std::flush;
       if (!YnPrompt(false))
          return _error->Error(_("Some packages could not be authenticated"));
 
@@ -286,9 +286,8 @@ bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask, bool Safety)
 	 if (_config->FindI("quiet",0) < 2 &&
 	     _config->FindB("APT::Get::Assume-Yes",false) == false)
 	 {
-	    c2out << _("Do you want to continue [Y/n]? ") << std::flush;
-	 
-	    if (YnPrompt() == false)
+            c2out << _("Do you want to continue?") << std::flush;
+ 	    if (YnPrompt() == false)
 	    {
 	       c2out << _("Abort.") << std::endl;
 	       exit(1);

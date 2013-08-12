@@ -284,8 +284,8 @@ bool FTWScanner::Delink(string &FileName,const char *OriginalPath,
 		  if (link(FileName.c_str(),OriginalPath) != 0)
 		  {
 		     // Panic! Restore the symlink
-		     if(symlink(OldLink,OriginalPath) < 0)
-                        _error->Errno("FTWScanner::Delink", "symlink failed");
+		     if (symlink(OldLink,OriginalPath) != 0)
+                        _error->Errno("FTWScanner::Delink", "failed to restore symlink");
 		     return _error->Errno("link",_("*** Failed to link %s to %s"),
 					  FileName.c_str(),
 					  OriginalPath);
