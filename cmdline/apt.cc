@@ -106,6 +106,9 @@ int main(int argc, const char *argv[])					/*{{{*/
                 << std::endl
                 << std::endl;
    }
+   // FIXME: move into a new libprivate/private-install.cc:Install()
+   _config->Set("DPkgPM::Progress", "1");
+   _config->Set("Apt::Color", "1");
 
    InitOutput();
 
@@ -118,10 +121,6 @@ int main(int argc, const char *argv[])					/*{{{*/
         _error->DumpErrors();
         return 100;
     }
-
-   // FIXME: move into a new libprivate/private-install.cc:Install()
-   _config->Set("DPkgPM::Progress", "1");
-   _config->Set("Apt::Color", "1");
 
    // Parse the command line and initialize the package library
    CommandLine CmdL(Args.data(), _config);

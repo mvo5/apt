@@ -43,7 +43,7 @@ bool InitOutput()
    {
       _config->Set("APT::Color", "false");
    }
-   else
+   else if(_config->FindB("APT::Color", false) == true)
    {
       // FIXME: not really Colors, more generic markers
       _config->CndSet("APT::Color::Progress-Start", "\x1B[32m");
