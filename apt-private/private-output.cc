@@ -49,6 +49,12 @@ bool InitOutput()
       _config->CndSet("APT::Color::Progress-Start", "\x1B[32m");
       _config->CndSet("APT::Color::Progress-Stop", "\x1B[0m");
 
+      _config->CndSet("APT::Color::Remove-Pkgs-Start", "\x1B[31m");
+      _config->CndSet("APT::Color::Remove-Pkgs-Stop",  "\x1B[0m");
+
+      _config->CndSet("APT::Color::New-Pkgs-Start", "\x1B[33m");
+      _config->CndSet("APT::Color::New-Pkgs-Stop",  "\x1B[0m");
+
       _config->CndSet("APT::Color::Red", "\x1B[31m");
       _config->CndSet("APT::Color::Green", "\x1B[32m");
       _config->CndSet("APT::Color::Yellow", "\x1B[33m");
@@ -446,8 +452,9 @@ void ShowNew(ostream &out,CacheFile &Cache)
          VersionsList += string(Cache[I].CandVersion) + "\n";
       }
    }
-   
+   c0out << _config->Find("APT::Color::New-Pkgs-Start", "");   
    ShowList(out,_("The following NEW packages will be installed:"),List,VersionsList);
+   c0out << _config->Find("APT::Color::New-Pkgs-Stop", "");
 }
 									/*}}}*/
 // ShowDel - Show packages to delete					/*{{{*/
@@ -472,8 +479,10 @@ void ShowDel(ostream &out,CacheFile &Cache)
      VersionsList += string(Cache[I].CandVersion)+ "\n";
       }
    }
-   
+
+   c0out << _config->Find("APT::Color::Remove-Pkgs-Start", "");
    ShowList(out,_("The following packages will be REMOVED:"),List,VersionsList);
+   c0out << _config->Find("APT::Color::Remove-Pkgs-Stop", "");
 }
 									/*}}}*/
 // ShowKept - Show kept packages					/*{{{*/
@@ -495,7 +504,9 @@ void ShowKept(ostream &out,CacheFile &Cache)
       List += I.FullName(true) + " ";
       VersionsList += string(Cache[I].CurVersion) + " => " + Cache[I].CandVersion + "\n";
    }
+   c0out << _config->Find("APT::Color::Kept-Pkgs-Start", "");
    ShowList(out,_("The following packages have been kept back:"),List,VersionsList);
+   c0out << _config->Find("APT::Color::Kept-Pkgs-Stop", "");
 }
 									/*}}}*/
 // ShowUpgraded - Show upgraded packages				/*{{{*/
@@ -516,7 +527,10 @@ void ShowUpgraded(ostream &out,CacheFile &Cache)
       List += I.FullName(true) + " ";
       VersionsList += string(Cache[I].CurVersion) + " => " + Cache[I].CandVersion + "\n";
    }
+   
+   c0out << _config->Find("APT::Color::Upgrade-Pkgs-Start", "");   
    ShowList(out,_("The following packages will be upgraded:"),List,VersionsList);
+   c0out << _config->Find("APT::Color::Upgrade-Pkgs-Stop", "");   
 }
 									/*}}}*/
 // ShowDowngraded - Show downgraded packages				/*{{{*/
@@ -537,7 +551,12 @@ bool ShowDowngraded(ostream &out,CacheFile &Cache)
       List += I.FullName(true) + " ";
       VersionsList += string(Cache[I].CurVersion) + " => " + Cache[I].CandVersion + "\n";
    }
-   return ShowList(out,_("The following packages will be DOWNGRADED:"),List,VersionsList);
+
+   c0out << _config->Find("APT::Color::Downgrade-Pkgs-Start", "");   
+   bool res = ShowList(out,_("The following packages will be DOWNGRADED:"),List,VersionsList);
+   c0out << _config->Find("APT::Color::Downgrade-Pkgs-Stop", "");   
+
+   return res;
 }
 									/*}}}*/
 // ShowHold - Show held but changed packages				/*{{{*/
