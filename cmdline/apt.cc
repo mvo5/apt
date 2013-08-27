@@ -109,6 +109,7 @@ int main(int argc, const char *argv[])					/*{{{*/
    // FIXME: move into a new libprivate/private-install.cc:Install()
    _config->Set("DPkgPM::Progress", "1");
    _config->Set("Apt::Color", "1");
+   _config->Set("Apt::Get::Show-Delete-First", false);
 
    InitOutput();
 

@@ -116,8 +116,11 @@ bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask, bool Safety)
    bool Essential = false;
    
    // Show all the various warning indicators
-   ShowDel(c1out,Cache);
-   ShowNew(c1out,Cache);
+   if(_config->FindB("APT::Get::Show-Delete-First", true) == true)
+   {
+      ShowDel(c1out,Cache);
+      ShowNew(c1out,Cache);
+   }
    if (ShwKept == true)
       ShowKept(c1out,Cache);
    Fail |= !ShowHold(c1out,Cache);
@@ -127,6 +130,11 @@ bool InstallPackages(CacheFile &Cache,bool ShwKept,bool Ask, bool Safety)
    if (_config->FindB("APT::Get::Download-Only",false) == false)
         Essential = !ShowEssential(c1out,Cache);
    Fail |= Essential;
+   if(_config->FindB("APT::Get::Show-Delete-First", true) == false)
+   {
+      ShowDel(c1out,Cache);
+      ShowNew(c1out,Cache);
+   }
    Stats(c1out,Cache);
 
    // Sanity check
