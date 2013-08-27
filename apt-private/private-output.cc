@@ -42,13 +42,13 @@ bool InitOutput()
    if(!isatty(1))
    {
       _config->Set("APT::Color", "false");
-      _config->Set("APT::Color::Highlight", "");
-      _config->Set("APT::Color::Neutral", "");
-   } else {
-      // Colors
-      _config->CndSet("APT::Color::Highlight", "\x1B[32m");
-      _config->CndSet("APT::Color::Neutral", "\x1B[0m");
-      
+   }
+   else
+   {
+      // FIXME: not really Colors, more generic markers
+      _config->CndSet("APT::Color::Progress-Start", "\x1B[32m");
+      _config->CndSet("APT::Color::Progress-Stop", "\x1B[0m");
+
       _config->CndSet("APT::Color::Red", "\x1B[31m");
       _config->CndSet("APT::Color::Green", "\x1B[32m");
       _config->CndSet("APT::Color::Yellow", "\x1B[33m");
