@@ -1603,6 +1603,12 @@ void pkgDPkgPM::Reset()
 /* */
 void pkgDPkgPM::WriteApportReport(const char *pkgpath, const char *errormsg) 
 {
+   if (_config->FindB("Dpkg::ApportFailureReport", false) == false)
+   {
+      std::clog << "configured to not write apport reports" << std::endl;
+      return;
+   }
+
    // If apport doesn't exist or isn't installed do nothing
    // This e.g. prevents messages in 'universes' without apport
    pkgCache::PkgIterator apportPkg = Cache.FindPkg("apport");
@@ -1612,12 +1618,6 @@ void pkgDPkgPM::WriteApportReport(const char *pkgpath, const char *errormsg)
    string pkgname, reportfile, srcpkgname, pkgver, arch;
    string::size_type pos;
    FILE *report;
-
-   if (_config->FindB("Dpkg::ApportFailureReport", false) == false)
-   {
-      std::clog << "configured to not write apport reports" << std::endl;
-      return;
-   }
 
    // only report the first errors
    if(pkgFailures > _config->FindI("APT::Apport::MaxReports", 3))
