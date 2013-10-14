@@ -20,6 +20,9 @@ public:
    bool Install(pkgCache::PkgIterator Pkg, std::string File) {
       return pkgDPkgPM::Install(Pkg, File);
    }
+   bool Configure(pkgCache::PkgIterator Pkg) {
+      return pkgDPkgPM::Configure(Pkg);
+   }
    void BuildOpsMap() {
       pkgDPkgPM::BuildOpsMap();
    }
@@ -45,6 +48,7 @@ TestDPkgPM* Setup()
    // pretend we install stuff
    pkgCache::PkgIterator pkg = cache->FindPkg("apt");
    pm->Install(pkg, "/var/cache/apt/archives/apt_1.0_all.deb");
+   pm->Configure(pkg);
    pm->BuildOpsMap();
 
    return pm;
@@ -79,12 +83,27 @@ void test_process_dpkg_status_line_simple(TestDPkgPM *pm)
    char *ok = "status: apt: half-installed";
    pm->ProcessDpkgStatusLine(fd, ok);
    
-   assert_written_to_fd(fd, "pmstatus:apt:amd64:50:Preparing apt:amd64\n");
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:20:Preparing apt:amd64\n");
 
    fd = prepare_tmp_fd();
    char *ok2 = "status: apt: unpacked";
    pm->ProcessDpkgStatusLine(fd, ok2);
-   assert_written_to_fd(fd, "pmstatus:apt:amd64:100:Unpacking apt:amd64\n");
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:40:Unpacking apt:amd64\n");
+
+   fd = prepare_tmp_fd();
+   char *ok3 = "status: apt: unpacked";
+   pm->ProcessDpkgStatusLine(fd, ok3);
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:60:Preparing to configure apt:amd64\n");
+
+   fd = prepare_tmp_fd();
+   char *ok4 = "status: apt: half-configured";
+   pm->ProcessDpkgStatusLine(fd, ok4);
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:80:Configuring apt:amd64\n");
+
+   fd = prepare_tmp_fd();
+   char *ok5 = "status: apt: installed";
+   pm->ProcessDpkgStatusLine(fd, ok5);
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:100:Installed apt:amd64\n");
 
 }
 
