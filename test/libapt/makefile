@@ -111,3 +111,9 @@ SLIBS = -lapt-pkg
 SOURCE = tagfile_test.cc
 include $(PROGRAM_H)
 
+# test dpkgppm
+PROGRAM = DpkgPM${BASENAME}
+SLIBS = -lapt-pkg 
+SOURCE = dpkgpm_test.cc
+include $(PROGRAM_H)
+

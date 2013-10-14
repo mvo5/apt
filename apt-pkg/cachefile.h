@@ -84,4 +84,5 @@ class pkgCacheFile
    virtual ~pkgCacheFile();
 };
 
+
 #endif
