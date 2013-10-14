@@ -522,7 +522,6 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
    if (Debug == true)
       std::clog << "got from dpkg '" << line << "'" << std::endl;
 
-
    /* dpkg sends strings like this:
       'status:   <pkg>: <pkg  qstate>'
       'status:   <pkg>:<arch>: <pkg  qstate>'
