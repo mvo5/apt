@@ -69,5 +69,11 @@ int main(int argc,char *argv[])
    result = StringSplit(input, "");
    equals(result.size(), 0);
 
+   input = " ab c \n";
+   equals(APT::String::Strip(input), "ab c");
+
+   input = "abc";
+   equals(APT::String::Strip(input), "abc");
+
    return 0;
 }

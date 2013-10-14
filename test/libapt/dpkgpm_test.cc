@@ -10,28 +10,43 @@ class TestDPkgPM : public pkgDPkgPM
 public:
    TestDPkgPM(pkgDepCache *Cache)  : pkgDPkgPM(Cache)
    {
-      PackagesTotal = 1;
    }
    void ProcessDpkgStatusLine(int OutStatusFd, char *line)
    {
       pkgDPkgPM::ProcessDpkgStatusLine(OutStatusFd, line);
    }
+
+   // helper
+   bool Install(pkgCache::PkgIterator Pkg, std::string File) {
+      return pkgDPkgPM::Install(Pkg, File);
+   }
+   void BuildOpsMap() {
+      pkgDPkgPM::BuildOpsMap();
+   }
+
 };
 
 // FIXME: move all into the TestDPkgPM class
 TestDPkgPM* Setup()
 {
+   // init
    pkgInitConfig(*_config);
    pkgInitSystem(*_config, _system);
-
    _config->Set("Dpkg::ApportFailureReport", "false");
 
+   // get cache
    OpProgress progress;
    pkgCacheFile cache;
    cache.Open(progress, false);
-   pkgDepCache *depcache = cache.GetDepCache();
 
-   TestDPkgPM *pm = new TestDPkgPM(depcache);
+   // build our test PM
+   TestDPkgPM *pm = new TestDPkgPM(cache);
+   
+   // pretend we install stuff
+   pkgCache::PkgIterator pkg = cache->FindPkg("apt");
+   pm->Install(pkg, "/var/cache/apt/archives/apt_1.0_all.deb");
+   pm->BuildOpsMap();
+
    return pm;
 }
 
@@ -40,28 +55,48 @@ void TearDown(TestDPkgPM *pm)
    delete pm;
 };
 
+int prepare_tmp_fd()
+{
+   char tmpname[] = "dpkgpmXXXXXX";
+   int fd = mkstemp(tmpname);
+   return fd;
+}
+
+void assert_written_to_fd(int fd, string expected)
+{
+   char buf[200];
+   lseek(fd, 0, SEEK_SET);
+   int i = read(fd, buf, sizeof(buf));
+   buf[i] = 0;
+
+   equals(string(buf), expected);
+}
+
 void test_process_dpkg_status_line_simple(TestDPkgPM *pm)
 {
-   // test
-   char *ok = "status: 2vcard: half-configured";
-   pm->ProcessDpkgStatusLine(STDOUT_FILENO, ok);
+   int fd = prepare_tmp_fd();
+
+   char *ok = "status: apt: half-installed";
+   pm->ProcessDpkgStatusLine(fd, ok);
    
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:50:Preparing apt:amd64\n");
+
+   fd = prepare_tmp_fd();
+   char *ok2 = "status: apt: unpacked";
+   pm->ProcessDpkgStatusLine(fd, ok2);
+   assert_written_to_fd(fd, "pmstatus:apt:amd64:100:Unpacking apt:amd64\n");
+
 }
 
 void test_process_dpkg_status_line_error(TestDPkgPM *pm)
 {
-   char tmpname[] = "dpkgpmXXXXXX";
-   int fd = mkstemp(tmpname);
+   int fd = prepare_tmp_fd();
 
    char *err = "status: /var/cache/apt/archives/krecipes_0.8.1-0ubuntu1_i386.deb : error : trying to overwrite `/usr/share/doc/kde/HTML/en/krecipes/krectip.png', which is also in package krecipes-data ";
+
    pm->ProcessDpkgStatusLine(fd, err);
 
-   char buf[200];
-   lseek(fd, 0, SEEK_SET);
-   read(fd, buf, sizeof(buf));
-
-   equals(buf, "pmerror:/var/cache/apt/archives/krecipes_0.8.1-0ubuntu1_i386.deb :0:trying to overwrite `/usr/share/doc/kde/HTML/en/krecipes/krectip.png', which is also in package krecipes-data \n");
-
+   assert_written_to_fd(fd, "pmerror:/var/cache/apt/archives/krecipes_0.8.1-0ubuntu1_i386.deb :100:trying to overwrite `/usr/share/doc/kde/HTML/en/krecipes/krectip.png', which is also in package krecipes-data \n");
 }
 
 int main(int argc,char *argv[])
