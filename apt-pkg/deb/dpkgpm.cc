@@ -552,12 +552,22 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 	 std::clog << "ignoring line: not enough ':'" << std::endl;
       return;
    }
-   // dpkg does not send always send "pkgname:arch" so we add it here if needed
+   // dpkg does not send always send "pkgname:arch" so we need to find out
+   // the arch here - dpkg really should always send us the full name
    std::string pkgname = list[1];
    if (pkgname.find(":") == std::string::npos)
    {
-      string const nativeArch = _config->Find("APT::Architecture");
-      pkgname = pkgname + ":" + nativeArch;
+      // find the package in the group that is in a touched by dpkg
+      // if there are multiple dpkg will send us a full pkgname:arch
+      pkgCache::GrpIterator Grp = Cache.FindGrp(pkgname);
+      pkgCache::PkgIterator P = Grp.PackageList();
+      for (; P.end() != true; P = Grp.NextPkg(P))
+      {
+        if(Cache[P].Mode != pkgDepCache::ModeKeep) {
+           pkgname = P.FullName();
+           break;
+        }
+      }
    }
    const char* const pkg = pkgname.c_str();
    const char* action = list[2].c_str();
@@ -626,6 +636,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
    const char *next_action = NULL;
    if(PackageOpsDone[pkg] < states.size())
       next_action = states[PackageOpsDone[pkg]].state;
+
    // check if the package moved to the next dpkg state
    if(next_action && (strcmp(action, next_action) == 0)) 
    {

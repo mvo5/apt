@@ -28,12 +28,11 @@ pmstatus:testing:60:Configuring testing
 pmstatus:testing:amd64:80:Configuring testing:amd64
 pmstatus:testing:amd64:100:Installed testing:amd64" cat apt-progress.log
 
-# install non-native
+# install non-native and ensure we get proper progress info
 exec 3> apt-progress2.log
 testsuccess aptget install testing2:i386 -y -o APT::Status-Fd=3
 
 # and compare
-cat apt-progress2.log
 testequal "dlstatus:1:0:Retrieving file 1 of 1
 dlstatus:1:0:Retrieving file 1 of 1
 pmstatus:dpkg-exec:0:Running dpkg
