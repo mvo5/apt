@@ -23,8 +23,8 @@ public:
    bool Configure(pkgCache::PkgIterator Pkg) {
       return pkgDPkgPM::Configure(Pkg);
    }
-   void BuildOpsMap() {
-      pkgDPkgPM::BuildOpsMap();
+   void BuildDpkgProgressMap() {
+      pkgDPkgPM::BuildDpkgProgressMap();
    }
 
 };
@@ -49,7 +49,7 @@ TestDPkgPM* Setup()
    pkgCache::PkgIterator pkg = cache->FindPkg("apt");
    pm->Install(pkg, "/var/cache/apt/archives/apt_1.0_all.deb");
    pm->Configure(pkg);
-   pm->BuildOpsMap();
+   pm->BuildDpkgProgressMap();
 
    return pm;
 }

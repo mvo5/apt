@@ -515,13 +515,6 @@ void pkgDPkgPM::DoTerminalPty(int master)
  */
 void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 {
-   bool const Debug = _config->FindB("Debug::pkgDPkgProgressReporting",false);
-   // the status we output
-   ostringstream status;
-
-   if (Debug == true)
-      std::clog << "got from dpkg '" << line << "'" << std::endl;
-
    /* dpkg sends strings like this:
       'status:   <pkg>: <pkg  qstate>'
       'status:   <pkg>:<arch>: <pkg  qstate>'
@@ -539,6 +532,11 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
       'processing: trigproc: trigger'
 	    
    */
+
+   bool const Debug = _config->FindB("Debug::pkgDPkgProgressReporting",false);
+   if (Debug == true)
+      std::clog << "got from dpkg '" << line << "'" << std::endl;
+
    // we need to split on ": " (note the appended space) as the ':' is
    // part of the pkgname:arch information that dpkg sends
    // 
@@ -552,9 +550,56 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 	 std::clog << "ignoring line: not enough ':'" << std::endl;
       return;
    }
+
+   // the status we output
+   ostringstream status;
+
+   // check if its a prefix we understand
+   std::string prefix = APT::String::Strip(list[0]);
+
+   // 'processing' from dpkg looks like
+   // 'processing: action: pkg'
+   //   E.g. 'processing: purge: pkg'
+   if(prefix == "processing")
+   {
+      std::string action =  list[1];
+      std::string pkg_or_trigger = list[2];
+      const std::pair<const char *, const char *> * const iter =
+	std::find_if(PackageProcessingOpsBegin,
+		     PackageProcessingOpsEnd,
+                     MatchProcessingOp(action.c_str()));
+      if(iter == PackageProcessingOpsEnd)
+      {
+	 if (Debug == true)
+	    std::clog << "ignoring unknown action: " << action << std::endl;
+	 return;
+      }
+      char s[200];
+      snprintf(s, sizeof(s), _(iter->second), pkg_or_trigger.c_str());
+
+      status << "pmstatus:" << pkg_or_trigger
+	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
+	     << ":" << s
+	     << endl;
+      if(OutStatusFd > 0)
+	 FileFd::Write(OutStatusFd, status.str().c_str(), status.str().size());
+      if (Debug == true)
+	 std::clog << "send: '" << status.str() << "'" << endl;
+
+      if (action == "disappear")
+	 handleDisappearAction(pkg_or_trigger);
+      return;
+   }
+   
+   // continue with "status"
+   if (prefix == "status")
+   {
+
+   std::string pkgname = APT::String::Strip(list[1]);
+   std::string action = APT::String::Strip(list[2]);
+
    // dpkg does not send always send "pkgname:arch" so we need to find out
    // the arch here - dpkg really should always send us the full name
-   std::string pkgname = list[1];
    if (pkgname.find(":") == std::string::npos)
    {
       // find the package in the group that is in a touched by dpkg
@@ -569,43 +614,9 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
         }
       }
    }
-   const char* const pkg = pkgname.c_str();
-   const char* action = list[2].c_str();
+   const char *pkg = pkgname.c_str();
 
-   // 'processing' from dpkg looks like
-   // 'processing: action: pkg'
-   if(strncmp(list[0].c_str(), "processing", strlen("processing")) == 0)
-   {
-      char s[200];
-      const char* const pkg_or_trigger = list[2].c_str();
-      action =  list[1].c_str();
-      const std::pair<const char *, const char *> * const iter =
-	std::find_if(PackageProcessingOpsBegin,
-		     PackageProcessingOpsEnd,
-		     MatchProcessingOp(action));
-      if(iter == PackageProcessingOpsEnd)
-      {
-	 if (Debug == true)
-	    std::clog << "ignoring unknown action: " << action << std::endl;
-	 return;
-      }
-      snprintf(s, sizeof(s), _(iter->second), pkg_or_trigger);
-
-      status << "pmstatus:" << pkg_or_trigger
-	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
-	     << ":" << s
-	     << endl;
-      if(OutStatusFd > 0)
-	 FileFd::Write(OutStatusFd, status.str().c_str(), status.str().size());
-      if (Debug == true)
-	 std::clog << "send: '" << status.str() << "'" << endl;
-
-      if (strncmp(action, "disappear", strlen("disappear")) == 0)
-	 handleDisappearAction(pkg_or_trigger);
-      return;
-   }
-
-   if(strncmp(action,"error",strlen("error")) == 0)
+   if(action == "error")
    {
       status << "pmerror:" << list[1]
 	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
@@ -619,7 +630,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
       WriteApportReport(list[1].c_str(), list[3].c_str());
       return;
    }
-   else if(strncmp(action,"conffile",strlen("conffile")) == 0)
+   else if(action == "conffile")
    {
       status << "pmconffile:" << list[1]
 	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
@@ -632,13 +643,14 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
       return;
    }
 
+   // "normal" progress
    vector<struct DpkgState> const &states = PackageOps[pkg];
    const char *next_action = NULL;
    if(PackageOpsDone[pkg] < states.size())
       next_action = states[PackageOpsDone[pkg]].state;
 
    // check if the package moved to the next dpkg state
-   if(next_action && (strcmp(action, next_action) == 0)) 
+   if(next_action && (action == next_action))
    {
       // only read the translation if there is actually a next
       // action
@@ -665,6 +677,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
    if (Debug == true) 
       std::clog << "(parsed from dpkg) pkg: " << pkg 
 		<< " action: " << action << endl;
+   }
 }
 									/*}}}*/
 // DPkgPM::handleDisappearAction					/*{{{*/
@@ -988,7 +1001,7 @@ void pkgDPkgPM::SetupTerminalScrollArea(int nr_rows)
      std::flush(std::cout);
 }
 
-void pkgDPkgPM::BuildOpsMap()
+void pkgDPkgPM::BuildDpkgProgressMap()
 {
    // map the dpkg states to the operations that are performed
    // (this is sorted in the same way as Item::Ops)
@@ -1125,7 +1138,7 @@ bool pkgDPkgPM::Go(int OutStatusFd)
    if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
       List.push_back(Item(Item::ConfigurePending, PkgIterator()));
 
-   BuildOpsMap();
+   BuildDpkgProgressMap();
 
    d->stdin_is_dev_null = false;
 
