@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture 'amd64' 'i386'
+
+buildsimplenativepackage 'postinst-error' 'amd64,i386' '0.8.15' 'stable' '' 'pkg with posinst error' '' '' '' '#!/bin/sh\nexit 1'
+
+setupaptarchive 
+
+exec 3> apt-progress.log
+testfailure aptget install postinst-error -y -o APT::Status-Fd=3
+msgtest "Ensure correct error message for postinst error"
+grep -q "pmerror:postinst-error:80:subprocess installed post-installation script returned error exit status 2" apt-progress.log && msgpass || msgfail
+
