@@ -26,7 +26,6 @@ public:
    void BuildDpkgProgressMap() {
       pkgDPkgPM::BuildDpkgProgressMap();
    }
-
 };
 
 // FIXME: move all into the TestDPkgPM class
@@ -63,6 +62,7 @@ int prepare_tmp_fd()
 {
    char tmpname[] = "dpkgpmXXXXXX";
    int fd = mkstemp(tmpname);
+   unlink(tmpname);
    return fd;
 }
 

@@ -590,9 +590,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 	 handleDisappearAction(pkg_or_trigger);
       return;
    }
-   
-   // continue with "status"
-   if (prefix == "status")
+   else if (prefix == "status")
    {
 
    std::string pkgname = APT::String::Strip(list[1]);
@@ -1056,7 +1054,7 @@ void pkgDPkgPM::BuildDpkgProgressMap()
 	 PackagesTotal++;
       }
    }
-      }
+}
 
 // DPkgPM::Go - Run the sequence					/*{{{*/
 // ---------------------------------------------------------------------
