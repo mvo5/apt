@@ -605,13 +605,17 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
       // find the package in the group that is in a touched by dpkg
       // if there are multiple dpkg will send us a full pkgname:arch
       pkgCache::GrpIterator Grp = Cache.FindGrp(pkgname);
-      pkgCache::PkgIterator P = Grp.PackageList();
-      for (; P.end() != true; P = Grp.NextPkg(P))
+      if (Grp.end() == false) 
       {
-        if(Cache[P].Mode != pkgDepCache::ModeKeep) {
-           pkgname = P.FullName();
-           break;
-        }
+          pkgCache::PkgIterator P = Grp.PackageList();
+          for (; P.end() != true; P = Grp.NextPkg(P))
+          {
+              if(Cache[P].Mode != pkgDepCache::ModeKeep)
+              {
+                  pkgname = P.FullName();
+                  break;
+              }
+          }
       }
    }
    const char *full_pkgname = pkgname.c_str();
