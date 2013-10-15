@@ -614,11 +614,12 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
         }
       }
    }
-   const char *pkg = pkgname.c_str();
+   const char *full_pkgname = pkgname.c_str();
+   std::string short_pkgname = StringSplit(pkgname, ":")[0];
 
    if(action == "error")
    {
-      status << "pmerror:" << list[1]
+      status << "pmerror:" << short_pkgname
 	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
 	     << ":" << list[3]
 	     << endl;
@@ -627,12 +628,12 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
       if (Debug == true)
 	 std::clog << "send: '" << status.str() << "'" << endl;
       pkgFailures++;
-      WriteApportReport(list[1].c_str(), list[3].c_str());
+      WriteApportReport(pkgname.c_str(), list[3].c_str());
       return;
    }
    else if(action == "conffile")
    {
-      status << "pmconffile:" << list[1]
+      status << "pmconffile:" << short_pkgname
 	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
 	     << ":" << list[3]
 	     << endl;
@@ -644,25 +645,25 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
    }
 
    // "normal" progress
-   vector<struct DpkgState> const &states = PackageOps[pkg];
+   vector<struct DpkgState> const &states = PackageOps[full_pkgname];
    const char *next_action = NULL;
-   if(PackageOpsDone[pkg] < states.size())
-      next_action = states[PackageOpsDone[pkg]].state;
+   if(PackageOpsDone[full_pkgname] < states.size())
+      next_action = states[PackageOpsDone[full_pkgname]].state;
 
    // check if the package moved to the next dpkg state
    if(next_action && (action == next_action))
    {
       // only read the translation if there is actually a next
       // action
-      const char *translation = _(states[PackageOpsDone[pkg]].str);
+      const char *translation = _(states[PackageOpsDone[full_pkgname]].str);
       char s[200];
-      snprintf(s, sizeof(s), translation, pkg);
+      snprintf(s, sizeof(s), translation, short_pkgname.c_str());
 
       // we moved from one dpkg state to a new one, report that
-      PackageOpsDone[pkg]++;
+      PackageOpsDone[full_pkgname]++;
       PackagesDone++;
       // build the status str
-      status << "pmstatus:" << pkg 
+      status << "pmstatus:" << short_pkgname
 	     << ":"  << (PackagesDone/float(PackagesTotal)*100.0) 
 	     << ":" << s
 	     << endl;
@@ -675,7 +676,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(int OutStatusFd, char *line)
 	 std::clog << "send: '" << status.str() << "'" << endl;
    }
    if (Debug == true) 
-      std::clog << "(parsed from dpkg) pkg: " << pkg 
+      std::clog << "(parsed from dpkg) pkg: " << full_pkgname
 		<< " action: " << action << endl;
    }
 }
