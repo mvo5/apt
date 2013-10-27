@@ -999,28 +999,11 @@ void pkgDPkgPM::BuildPackagesProgressMap()
       }
    }
 }
-                                                                        /*}}}*/
-// DPkgPM::Go - Run the sequence					/*{{{*/
-// ---------------------------------------------------------------------
-/* This globs the operations and calls dpkg 
- *
- * If it is called with a progress object apt will report the install
- * progress to this object. It maps the dpkg states a package goes
- * through to human readable (and i10n-able)
- * names and calculates a percentage for each step.
- */
-bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
+
+static size_t
+AddDpkgArgumentsFromAptConfig(vector<const char *> &Args)
 {
-   pkgPackageManager::SigINTStop = false;
-   d->progress = progress;
-
-   // Generate the base argument list for dpkg
-   unsigned long StartSize = 0;
-   std::vector<const char *> Args;
-   std::string DpkgExecutable = getDpkgExecutable();
-   Args.push_back(DpkgExecutable.c_str());
-   StartSize += DpkgExecutable.length();
-
+   size_t StartSize = 0;
    // Stick in any custom dpkg options
    Configuration::Item const *Opts = _config->Tree("DPkg::Options");
    if (Opts != 0)
@@ -1034,8 +1017,17 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 StartSize += Opts->Value.length();
       }
    }
+   return StartSize;
+}
 
-   size_t const BaseArgs = Args.size();
+static bool
+DpkgHasMultiarchSupport()
+{
+   vector<const char *> Args;
+   std::string DpkgExecutable = getDpkgExecutable();
+   Args.push_back(DpkgExecutable.c_str());
+   AddDpkgArgumentsFromAptConfig(Args);
+   
    // we need to detect if we can qualify packages with the architecture or not
    Args.push_back("--assert-multi-arch");
    Args.push_back(NULL);
@@ -1054,14 +1046,54 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       _exit(2);
    }
 
+   if (dpkgAssertMultiArch > 0)
+   {
+      int Status = 0;
+      while (waitpid(dpkgAssertMultiArch, &Status, 0) != dpkgAssertMultiArch)
+      {
+	 if (errno == EINTR)
+	    continue;
+	 _error->WarningE("dpkgGo", _("Waited for %s but it wasn't there"), "dpkg --assert-multi-arch");
+	 break;
+      }
+      if (WIFEXITED(Status) == true && WEXITSTATUS(Status) == 0)
+	 return true;
+   }
+   return false;
+}
+                                                                        /*}}}*/
+// DPkgPM::Go - Run the sequence					/*{{{*/
+// ---------------------------------------------------------------------
+/* This globs the operations and calls dpkg 
+ *
+ * If it is called with a progress object apt will report the install
+ * progress to this object. It maps the dpkg states a package goes
+ * through to human readable (and i10n-able)
+ * names and calculates a percentage for each step.
+ */
+bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
+{
+
    fd_set rfds;
    struct timespec tv;
    sigset_t sigmask;
    sigset_t original_sigmask;
 
+   pkgPackageManager::SigINTStop = false;
    unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
    unsigned int const MaxArgBytes = _config->FindI("Dpkg::MaxArgBytes",32*1024);
    bool const NoTriggers = _config->FindB("DPkg::NoTriggers", false);
+   d->progress = progress;
+
+   // Generate the base argument list for dpkg
+   std::vector<const char *> Args;
+   unsigned long StartSize = 0;
+
+   std::string DpkgExecutable = getDpkgExecutable();
+   Args.push_back(DpkgExecutable.c_str());
+   StartSize += DpkgExecutable.length();
+   StartSize += AddDpkgArgumentsFromAptConfig(Args);
+   size_t const BaseArgs = Args.size();
 
    if (RunScripts("DPkg::Pre-Invoke") == false)
       return false;
@@ -1084,20 +1116,7 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    // create log
    OpenLog();
 
-   bool dpkgMultiArch = false;
-   if (dpkgAssertMultiArch > 0)
-   {
-      int Status = 0;
-      while (waitpid(dpkgAssertMultiArch, &Status, 0) != dpkgAssertMultiArch)
-      {
-	 if (errno == EINTR)
-	    continue;
-	 _error->WarningE("dpkgGo", _("Waited for %s but it wasn't there"), "dpkg --assert-multi-arch");
-	 break;
-      }
-      if (WIFEXITED(Status) == true && WEXITSTATUS(Status) == 0)
-	 dpkgMultiArch = true;
-   }
+   bool dpkgMultiArch = DpkgHasMultiarchSupport();
 
    // go over each item
    vector<Item>::const_iterator I = List.begin();
