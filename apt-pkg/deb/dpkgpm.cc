@@ -1301,6 +1301,23 @@ pkgDPkgPM::RunDpkgAndMonitorStatusFd(vector<char *> &Packages,
       return true;
 }
 
+static void RebuildPackageCache()
+{
+   std::string const oldpkgcache = _config->FindFile("Dir::cache::pkgcache");
+   if (oldpkgcache.empty() == false && RealFileExists(oldpkgcache) == true &&
+       unlink(oldpkgcache.c_str()) == 0)
+   {
+      std::string const srcpkgcache = _config->FindFile("Dir::cache::srcpkgcache");
+      if (srcpkgcache.empty() == false && RealFileExists(srcpkgcache) == true)
+      {
+         _error->PushToStack();
+         pkgCacheFile CacheFile;
+         CacheFile.BuildCaches(NULL, true);
+         _error->RevertToStack();
+      }
+   }
+}
+
 
 // DPkgPM::Go - Run the sequence					/*{{{*/
 // ---------------------------------------------------------------------
@@ -1531,7 +1548,7 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       if (pkgPackageManager::SigINTStop && (Op == Item::Remove || Op == Item::Purge || Op == Item::Install)) 
          break;
 
-      if(!RunDpkgAndDoStuff(Packages, Args))
+      if(!RunDpkgAndMonitorStatusFd(Packages, Args))
       {
 	 bool const stopOnError = _config->FindB("Dpkg::StopOnError",true);
        	 if(stopOnError) 
@@ -1550,27 +1567,15 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    if (pkgPackageManager::SigINTStop)
        _error->Warning(_("Operation was interrupted before it could finish"));
 
+   if (_config->FindB("Debug::pkgDPkgPM",false) == false)
+   {
+      RebuildPackageCache();
+      Cache.writeStateFile(NULL);
+   }
+
    if (RunScripts("DPkg::Post-Invoke") == false)
       return false;
 
-   if (_config->FindB("Debug::pkgDPkgPM",false) == false)
-   {
-      std::string const oldpkgcache = _config->FindFile("Dir::cache::pkgcache");
-      if (oldpkgcache.empty() == false && RealFileExists(oldpkgcache) == true &&
-	  unlink(oldpkgcache.c_str()) == 0)
-      {
-	 std::string const srcpkgcache = _config->FindFile("Dir::cache::srcpkgcache");
-	 if (srcpkgcache.empty() == false && RealFileExists(srcpkgcache) == true)
-	 {
-	    _error->PushToStack();
-	    pkgCacheFile CacheFile;
-	    CacheFile.BuildCaches(NULL, true);
-	    _error->RevertToStack();
-	 }
-      }
-   }
-
-   Cache.writeStateFile(NULL);
    return true;
 }
 
