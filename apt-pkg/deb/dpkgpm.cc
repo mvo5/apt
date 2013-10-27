@@ -1332,21 +1332,7 @@ static void RebuildPackageCache()
 bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 {
 
-   pkgPackageManager::SigINTStop = false;
-   unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
-   unsigned int const MaxArgBytes = _config->FindI("Dpkg::MaxArgBytes",32*1024);
-   bool const NoTriggers = _config->FindB("DPkg::NoTriggers", false);
    d->progress = progress;
-
-   // Generate the base argument list for dpkg
-   std::vector<const char *> Args;
-   unsigned long StartSize = 0;
-
-   std::string DpkgExecutable = getDpkgExecutable();
-   Args.push_back(DpkgExecutable.c_str());
-   StartSize += DpkgExecutable.length();
-   StartSize += AddDpkgArgumentsFromAptConfig(Args);
-   size_t const BaseArgs = Args.size();
 
    if (RunScripts("DPkg::Pre-Invoke") == false)
       return false;
@@ -1365,6 +1351,21 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    // what kind of dpkg do we have
    d->dpkgMultiArch = DpkgHasMultiarchSupport();
 
+   pkgPackageManager::SigINTStop = false;
+   unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
+   unsigned int const MaxArgBytes = _config->FindI("Dpkg::MaxArgBytes",32*1024);
+   bool const NoTriggers = _config->FindB("DPkg::NoTriggers", false);
+
+   // Generate the base argument list for dpkg
+   std::vector<const char *> Args;
+   unsigned long StartSize = 0;
+
+   std::string DpkgExecutable = getDpkgExecutable();
+   Args.push_back(DpkgExecutable.c_str());
+   StartSize += DpkgExecutable.length();
+   StartSize += AddDpkgArgumentsFromAptConfig(Args);
+   size_t const BaseArgs = Args.size();
+
    // support subpressing of triggers processing for special
    // cases like d-i that runs the triggers handling manually
    bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
@@ -1372,6 +1373,8 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
       List.push_back(Item(Item::ConfigurePending, PkgIterator()));
 
+   // keep track of allocated strings for multiarch package names
+   std::vector<char *> Packages;
 
    // go over each item
    vector<Item>::const_iterator I = List.begin();
@@ -1395,8 +1398,7 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 for (; J != List.end() && J->Op == I->Op; ++J)
 	    /* nothing */;
 
-      // keep track of allocated strings for multiarch package names
-      std::vector<char *> Packages;
+      Packages.clear();
 
       // start with the baseset of arguments
       unsigned long Size = StartSize;
@@ -1547,6 +1549,8 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       }
       Args.push_back(NULL);
 
+      
+      
       // Check here for any SIGINT
       if (pkgPackageManager::SigINTStop && (Op == Item::Remove || Op == Item::Purge || Op == Item::Install)) 
          break;
