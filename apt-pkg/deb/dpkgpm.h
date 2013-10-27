@@ -86,6 +86,8 @@ class pkgDPkgPM : public pkgPackageManager
    void WriteHistoryTag(std::string const &tag, std::string value);
    std::string ExpandShortPackageName(pkgDepCache &Cache,
                                       const std::string &short_pkgname);
+   bool RunDpkgAndMonitorStatusFd(std::vector<char *> &Packages,
+                          const std::vector<const char *> &Args);
 
    // Terminal progress 
    void SetupTerminalScrollArea(int nr_scrolled_rows);

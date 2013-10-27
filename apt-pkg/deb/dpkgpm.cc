@@ -58,6 +58,7 @@ public:
                         progress(NULL)
    {
       dpkgbuf[0] = '\0';
+      dpkg_status_pipe[0] = dpkg_status_pipe[1] = -1;
    }
    ~pkgDPkgPMPrivate()
    {
@@ -69,6 +70,7 @@ public:
    FILE *term_out;
    FILE *history_out;
    string dpkg_error;
+   int dpkg_status_pipe[2];
    APT::Progress::PackageManager *progress;
 };
 
@@ -1062,6 +1064,244 @@ DpkgHasMultiarchSupport()
    return false;
 }
                                                                         /*}}}*/
+bool
+pkgDPkgPM::RunDpkgAndMonitorStatusFd(vector<char *> &Packages,
+            const vector<const char *> &Args)
+{
+   sigset_t sigmask;
+   sigset_t original_sigmask;
+
+   fd_set rfds;
+   struct timespec tv;
+
+      cout << flush;
+      clog << flush;
+      cerr << flush;
+
+      /* Mask off sig int/quit. We do this because dpkg also does when 
+         it forks scripts. What happens is that when you hit ctrl-c it sends
+	 it to all processes in the group. Since dpkg ignores the signal 
+	 it doesn't die but we do! So we must also ignore it */
+      sighandler_t old_SIGQUIT = signal(SIGQUIT,SIG_IGN);
+      sighandler_t old_SIGINT = signal(SIGINT,SigINT);
+      
+      
+      // ignore SIGHUP as well (debian #463030)
+      sighandler_t old_SIGHUP = signal(SIGHUP,SIG_IGN);
+
+      struct	termios tt;
+      struct	winsize win;
+      int	master = -1;
+      int	slave = -1;
+
+      // if tcgetattr does not return zero there was a error
+      // and we do not do any pty magic
+      _error->PushToStack();
+      if (tcgetattr(STDOUT_FILENO, &tt) == 0)
+      {
+	 ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&win);
+	 if (openpty(&master, &slave, NULL, &tt, &win) < 0)
+	 {
+	    _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
+	    master = slave = -1;
+	 }  else {
+	    struct termios rtt;
+	    rtt = tt;
+	    cfmakeraw(&rtt);
+	    rtt.c_lflag &= ~ECHO;
+	    rtt.c_lflag |= ISIG;
+	    // block SIGTTOU during tcsetattr to prevent a hang if
+	    // the process is a member of the background process group
+	    // http://www.opengroup.org/onlinepubs/000095399/functions/tcsetattr.html
+	    sigemptyset(&sigmask);
+	    sigaddset(&sigmask, SIGTTOU);
+	    sigprocmask(SIG_BLOCK,&sigmask, &original_sigmask);
+	    tcsetattr(0, TCSAFLUSH, &rtt);
+	    sigprocmask(SIG_SETMASK, &original_sigmask, 0);
+	 }
+      }
+      // complain only if stdout is either a terminal (but still failed) or is an invalid
+      // descriptor otherwise we would complain about redirection to e.g. /dev/null as well.
+      else if (isatty(STDOUT_FILENO) == 1 || errno == EBADF)
+         _error->Errno("tcgetattr", _("Can not write log (%s)"), _("Is stdout a terminal?"));
+
+      if (_error->PendingError() == true)
+	 _error->DumpErrors(std::cerr);
+      _error->RevertToStack();
+
+      // this is the dpkg status-fd, we need to keep it
+      _config->Set("APT::Keep-Fds::",d->dpkg_status_pipe[1]);
+
+      // Tell the progress that its starting and fork dpkg 
+      // FIXME: this is called once per dpkg run which is *too often*
+      d->progress->Start();
+
+      pid_t Child = ExecFork();
+      // This is the child
+      if (Child == 0)
+      {
+
+	 if(slave >= 0 && master >= 0) 
+	 {
+	    setsid();
+	    ioctl(slave, TIOCSCTTY, 0);
+	    close(master);
+	    dup2(slave, 0);
+	    dup2(slave, 1);
+	    dup2(slave, 2);
+	    close(slave);
+	 }
+	 close(d->dpkg_status_pipe[0]); // close the read end of the pipe
+
+	 dpkgChrootDirectory();
+
+	 if (chdir(_config->FindDir("DPkg::Run-Directory","/").c_str()) != 0)
+	    _exit(100);
+
+	 if (_config->FindB("DPkg::FlushSTDIN",true) == true && isatty(STDIN_FILENO))
+	 {
+	    int Flags,dummy;
+	    if ((Flags = fcntl(STDIN_FILENO,F_GETFL,dummy)) < 0)
+	       _exit(100);
+	    
+	    // Discard everything in stdin before forking dpkg
+	    if (fcntl(STDIN_FILENO,F_SETFL,Flags | O_NONBLOCK) < 0)
+	       _exit(100);
+	    
+	    while (read(STDIN_FILENO,&dummy,1) == 1);
+	    
+	    if (fcntl(STDIN_FILENO,F_SETFL,Flags & (~(long)O_NONBLOCK)) < 0)
+	       _exit(100);
+	 }
+	 /* No Job Control Stop Env is a magic dpkg var that prevents it
+	    from using sigstop */
+	 putenv((char *)"DPKG_NO_TSTP=yes");
+	 execvp(Args[0], (char**) &Args[0]);
+	 cerr << "Could not exec dpkg!" << endl;
+	 _exit(100);
+      }      
+
+      // apply ionice
+      if (_config->FindB("DPkg::UseIoNice", false) == true)
+	 ionice(Child);
+
+      // clear the Keep-Fd again
+      _config->Clear("APT::Keep-Fds",d->dpkg_status_pipe[1]);
+
+      // Wait for dpkg
+      int Status = 0;
+
+      // we read from dpkg here
+      int const _dpkgin = d->dpkg_status_pipe[0];
+      close(d->dpkg_status_pipe[1]);                        // close the write end of the pipe
+
+      if(slave > 0)
+	 close(slave);
+
+      // setups fds
+      sigemptyset(&sigmask);
+      sigprocmask(SIG_BLOCK,&sigmask,&original_sigmask);
+
+      /* free vectors (and therefore memory) as we don't need the included data anymore */
+      for (std::vector<char *>::const_iterator p = Packages.begin();
+	   p != Packages.end(); ++p)
+	 free(*p);
+      Packages.clear();
+
+      // the result of the waitpid call
+      int res;
+      int select_ret;
+      while ((res=waitpid(Child,&Status, WNOHANG)) != Child) {
+	 if(res < 0) {
+	    // FIXME: move this to a function or something, looks ugly here
+	    // error handling, waitpid returned -1
+	    if (errno == EINTR)
+	       continue;
+	    RunScripts("DPkg::Post-Invoke");
+
+	    // Restore sig int/quit
+	    signal(SIGQUIT,old_SIGQUIT);
+	    signal(SIGINT,old_SIGINT);
+
+	    signal(SIGHUP,old_SIGHUP);
+	    return _error->Errno("waitpid","Couldn't wait for subprocess");
+	 }
+
+	 // wait for input or output here
+	 FD_ZERO(&rfds);
+	 if (master >= 0 && !d->stdin_is_dev_null)
+	    FD_SET(0, &rfds); 
+	 FD_SET(_dpkgin, &rfds);
+	 if(master >= 0)
+	    FD_SET(master, &rfds);
+	 tv.tv_sec = 0;
+	 tv.tv_nsec = d->progress->GetPulseInterval();
+	 select_ret = pselect(max(master, _dpkgin)+1, &rfds, NULL, NULL, 
+			      &tv, &original_sigmask);
+	 if (select_ret < 0 && (errno == EINVAL || errno == ENOSYS))
+	    select_ret = racy_pselect(max(master, _dpkgin)+1, &rfds, NULL,
+				      NULL, &tv, &original_sigmask);
+
+         d->progress->Pulse();
+
+	 if (select_ret == 0) 
+  	    continue;
+  	 else if (select_ret < 0 && errno == EINTR)
+  	    continue;
+  	 else if (select_ret < 0) 
+ 	 {
+  	    perror("select() returned error");
+  	    continue;
+  	 } 
+	 
+	 if(master >= 0 && FD_ISSET(master, &rfds))
+	    DoTerminalPty(master);
+	 if(master >= 0 && FD_ISSET(0, &rfds))
+	    DoStdin(master);
+	 if(FD_ISSET(_dpkgin, &rfds))
+	    DoDpkgStatusFd(_dpkgin);
+      }
+      close(_dpkgin);
+
+      // Restore sig int/quit
+      signal(SIGQUIT,old_SIGQUIT);
+      signal(SIGINT,old_SIGINT);
+      
+      signal(SIGHUP,old_SIGHUP);
+
+      if(master >= 0) 
+      {
+	 tcsetattr(0, TCSAFLUSH, &tt);
+	 close(master);
+      }
+
+      // Check for an error code.
+      if (WIFEXITED(Status) == 0 || WEXITSTATUS(Status) != 0)
+      {
+	 // if it was set to "keep-dpkg-runing" then we won't return
+	 // here but keep the loop going and just report it as a error
+	 // for later
+	 bool const stopOnError = _config->FindB("Dpkg::StopOnError",true);
+	 
+	 if(stopOnError)
+	    RunScripts("DPkg::Post-Invoke");
+
+	 if (WIFSIGNALED(Status) != 0 && WTERMSIG(Status) == SIGSEGV) 
+	    strprintf(d->dpkg_error, "Sub-process %s received a segmentation fault.",Args[0]);
+	 else if (WIFEXITED(Status) != 0)
+	    strprintf(d->dpkg_error, "Sub-process %s returned an error code (%u)",Args[0],WEXITSTATUS(Status));
+	 else 
+	    strprintf(d->dpkg_error, "Sub-process %s exited unexpectedly",Args[0]);
+
+	 if(d->dpkg_error.size() > 0)
+	    _error->Error("%s", d->dpkg_error.c_str());
+
+         return false;
+      }      
+      return true;
+}
+
+
 // DPkgPM::Go - Run the sequence					/*{{{*/
 // ---------------------------------------------------------------------
 /* This globs the operations and calls dpkg 
@@ -1073,11 +1313,6 @@ DpkgHasMultiarchSupport()
  */
 bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 {
-
-   fd_set rfds;
-   struct timespec tv;
-   sigset_t sigmask;
-   sigset_t original_sigmask;
 
    pkgPackageManager::SigINTStop = false;
    unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
@@ -1168,16 +1403,16 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 Packages.reserve(size);
       }
 
-      int fd[2];
-      if (pipe(fd) != 0)
-	 return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
+      if (pipe(d->dpkg_status_pipe) != 0)
+         return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
 
 #define ADDARG(X) Args.push_back(X); Size += strlen(X)
 #define ADDARGC(X) Args.push_back(X); Size += sizeof(X) - 1
 
       ADDARGC("--status-fd");
       char status_fd_buf[20];
-      snprintf(status_fd_buf,sizeof(status_fd_buf),"%i", fd[1]);
+      snprintf(status_fd_buf,sizeof(status_fd_buf),"%i", 
+               d->dpkg_status_pipe[1]);
       ADDARG(status_fd_buf);
       unsigned long const Op = I->Op;
 
@@ -1292,239 +1527,20 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       }
       Args.push_back(NULL);
 
-      cout << flush;
-      clog << flush;
-      cerr << flush;
-
-      /* Mask off sig int/quit. We do this because dpkg also does when 
-         it forks scripts. What happens is that when you hit ctrl-c it sends
-	 it to all processes in the group. Since dpkg ignores the signal 
-	 it doesn't die but we do! So we must also ignore it */
-      sighandler_t old_SIGQUIT = signal(SIGQUIT,SIG_IGN);
-      sighandler_t old_SIGINT = signal(SIGINT,SigINT);
-      
       // Check here for any SIGINT
       if (pkgPackageManager::SigINTStop && (Op == Item::Remove || Op == Item::Purge || Op == Item::Install)) 
          break;
-      
-      
-      // ignore SIGHUP as well (debian #463030)
-      sighandler_t old_SIGHUP = signal(SIGHUP,SIG_IGN);
 
-      struct	termios tt;
-      struct	winsize win;
-      int	master = -1;
-      int	slave = -1;
-
-      // if tcgetattr does not return zero there was a error
-      // and we do not do any pty magic
-      _error->PushToStack();
-      if (tcgetattr(STDOUT_FILENO, &tt) == 0)
+      if(!RunDpkgAndDoStuff(Packages, Args))
       {
-	 ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&win);
-	 if (openpty(&master, &slave, NULL, &tt, &win) < 0)
-	 {
-	    _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
-	    master = slave = -1;
-	 }  else {
-	    struct termios rtt;
-	    rtt = tt;
-	    cfmakeraw(&rtt);
-	    rtt.c_lflag &= ~ECHO;
-	    rtt.c_lflag |= ISIG;
-	    // block SIGTTOU during tcsetattr to prevent a hang if
-	    // the process is a member of the background process group
-	    // http://www.opengroup.org/onlinepubs/000095399/functions/tcsetattr.html
-	    sigemptyset(&sigmask);
-	    sigaddset(&sigmask, SIGTTOU);
-	    sigprocmask(SIG_BLOCK,&sigmask, &original_sigmask);
-	    tcsetattr(0, TCSAFLUSH, &rtt);
-	    sigprocmask(SIG_SETMASK, &original_sigmask, 0);
-	 }
-      }
-      // complain only if stdout is either a terminal (but still failed) or is an invalid
-      // descriptor otherwise we would complain about redirection to e.g. /dev/null as well.
-      else if (isatty(STDOUT_FILENO) == 1 || errno == EBADF)
-         _error->Errno("tcgetattr", _("Can not write log (%s)"), _("Is stdout a terminal?"));
-
-      if (_error->PendingError() == true)
-	 _error->DumpErrors(std::cerr);
-      _error->RevertToStack();
-
-      // this is the dpkg status-fd, we need to keep it
-      _config->Set("APT::Keep-Fds::",fd[1]);
-
-      // Tell the progress that its starting and fork dpkg 
-      // FIXME: this is called once per dpkg run which is *too often*
-      d->progress->Start();
-
-      pid_t Child = ExecFork();
-      // This is the child
-      if (Child == 0)
-      {
-
-	 if(slave >= 0 && master >= 0) 
-	 {
-	    setsid();
-	    ioctl(slave, TIOCSCTTY, 0);
-	    close(master);
-	    dup2(slave, 0);
-	    dup2(slave, 1);
-	    dup2(slave, 2);
-	    close(slave);
-	 }
-	 close(fd[0]); // close the read end of the pipe
-
-	 dpkgChrootDirectory();
-
-	 if (chdir(_config->FindDir("DPkg::Run-Directory","/").c_str()) != 0)
-	    _exit(100);
-
-	 if (_config->FindB("DPkg::FlushSTDIN",true) == true && isatty(STDIN_FILENO))
-	 {
-	    int Flags,dummy;
-	    if ((Flags = fcntl(STDIN_FILENO,F_GETFL,dummy)) < 0)
-	       _exit(100);
-	    
-	    // Discard everything in stdin before forking dpkg
-	    if (fcntl(STDIN_FILENO,F_SETFL,Flags | O_NONBLOCK) < 0)
-	       _exit(100);
-	    
-	    while (read(STDIN_FILENO,&dummy,1) == 1);
-	    
-	    if (fcntl(STDIN_FILENO,F_SETFL,Flags & (~(long)O_NONBLOCK)) < 0)
-	       _exit(100);
-	 }
-	 /* No Job Control Stop Env is a magic dpkg var that prevents it
-	    from using sigstop */
-	 putenv((char *)"DPKG_NO_TSTP=yes");
-	 execvp(Args[0], (char**) &Args[0]);
-	 cerr << "Could not exec dpkg!" << endl;
-	 _exit(100);
-      }      
-
-      // apply ionice
-      if (_config->FindB("DPkg::UseIoNice", false) == true)
-	 ionice(Child);
-
-      // clear the Keep-Fd again
-      _config->Clear("APT::Keep-Fds",fd[1]);
-
-      // Wait for dpkg
-      int Status = 0;
-
-      // we read from dpkg here
-      int const _dpkgin = fd[0];
-      close(fd[1]);                        // close the write end of the pipe
-
-      if(slave > 0)
-	 close(slave);
-
-      // setups fds
-      sigemptyset(&sigmask);
-      sigprocmask(SIG_BLOCK,&sigmask,&original_sigmask);
-
-      /* free vectors (and therefore memory) as we don't need the included data anymore */
-      for (std::vector<char *>::const_iterator p = Packages.begin();
-	   p != Packages.end(); ++p)
-	 free(*p);
-      Packages.clear();
-
-      // the result of the waitpid call
-      int res;
-      int select_ret;
-      while ((res=waitpid(Child,&Status, WNOHANG)) != Child) {
-	 if(res < 0) {
-	    // FIXME: move this to a function or something, looks ugly here
-	    // error handling, waitpid returned -1
-	    if (errno == EINTR)
-	       continue;
-	    RunScripts("DPkg::Post-Invoke");
-
-	    // Restore sig int/quit
-	    signal(SIGQUIT,old_SIGQUIT);
-	    signal(SIGINT,old_SIGINT);
-
-	    signal(SIGHUP,old_SIGHUP);
-	    return _error->Errno("waitpid","Couldn't wait for subprocess");
-	 }
-
-	 // wait for input or output here
-	 FD_ZERO(&rfds);
-	 if (master >= 0 && !d->stdin_is_dev_null)
-	    FD_SET(0, &rfds); 
-	 FD_SET(_dpkgin, &rfds);
-	 if(master >= 0)
-	    FD_SET(master, &rfds);
-	 tv.tv_sec = 0;
-	 tv.tv_nsec = d->progress->GetPulseInterval();
-	 select_ret = pselect(max(master, _dpkgin)+1, &rfds, NULL, NULL, 
-			      &tv, &original_sigmask);
-	 if (select_ret < 0 && (errno == EINVAL || errno == ENOSYS))
-	    select_ret = racy_pselect(max(master, _dpkgin)+1, &rfds, NULL,
-				      NULL, &tv, &original_sigmask);
-
-         d->progress->Pulse();
-
-	 if (select_ret == 0) 
-  	    continue;
-  	 else if (select_ret < 0 && errno == EINTR)
-  	    continue;
-  	 else if (select_ret < 0) 
- 	 {
-  	    perror("select() returned error");
-  	    continue;
-  	 } 
-	 
-	 if(master >= 0 && FD_ISSET(master, &rfds))
-	    DoTerminalPty(master);
-	 if(master >= 0 && FD_ISSET(0, &rfds))
-	    DoStdin(master);
-	 if(FD_ISSET(_dpkgin, &rfds))
-	    DoDpkgStatusFd(_dpkgin);
-      }
-      close(_dpkgin);
-
-      // Restore sig int/quit
-      signal(SIGQUIT,old_SIGQUIT);
-      signal(SIGINT,old_SIGINT);
-      
-      signal(SIGHUP,old_SIGHUP);
-
-      if(master >= 0) 
-      {
-	 tcsetattr(0, TCSAFLUSH, &tt);
-	 close(master);
-      }
-
-      // Check for an error code.
-      if (WIFEXITED(Status) == 0 || WEXITSTATUS(Status) != 0)
-      {
-	 // if it was set to "keep-dpkg-runing" then we won't return
-	 // here but keep the loop going and just report it as a error
-	 // for later
 	 bool const stopOnError = _config->FindB("Dpkg::StopOnError",true);
-	 
-	 if(stopOnError)
-	    RunScripts("DPkg::Post-Invoke");
-
-	 if (WIFSIGNALED(Status) != 0 && WTERMSIG(Status) == SIGSEGV) 
-	    strprintf(d->dpkg_error, "Sub-process %s received a segmentation fault.",Args[0]);
-	 else if (WIFEXITED(Status) != 0)
-	    strprintf(d->dpkg_error, "Sub-process %s returned an error code (%u)",Args[0],WEXITSTATUS(Status));
-	 else 
-	    strprintf(d->dpkg_error, "Sub-process %s exited unexpectedly",Args[0]);
-
-	 if(d->dpkg_error.size() > 0)
-	    _error->Error("%s", d->dpkg_error.c_str());
-
-	 if(stopOnError) 
+       	 if(stopOnError) 
 	 {
 	    CloseLog();
             d->progress->Stop();
 	    return false;
 	 }
-      }      
+      }
    }
    CloseLog();
 
