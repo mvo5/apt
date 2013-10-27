@@ -55,7 +55,7 @@ class pkgDPkgPMPrivate
 public:
    pkgDPkgPMPrivate() : stdin_is_dev_null(false), dpkgbuf_pos(0),
 			term_out(NULL), history_out(NULL), 
-                        progress(NULL)
+                        progress(NULL), dpkgMultiArch(false)
    {
       dpkgbuf[0] = '\0';
       dpkg_status_pipe[0] = dpkg_status_pipe[1] = -1;
@@ -72,6 +72,7 @@ public:
    string dpkg_error;
    int dpkg_status_pipe[2];
    APT::Progress::PackageManager *progress;
+   bool dpkgMultiArch;
 };
 
 namespace
@@ -1353,13 +1354,6 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    if (RunScriptsWithPkgs("DPkg::Pre-Install-Pkgs") == false)
       return false;
 
-   // support subpressing of triggers processing for special
-   // cases like d-i that runs the triggers handling manually
-   bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
-   bool const TriggersPending = _config->FindB("DPkg::TriggersPending", false);
-   if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
-      List.push_back(Item(Item::ConfigurePending, PkgIterator()));
-
    // for the progress
    BuildPackagesProgressMap();
 
@@ -1368,7 +1362,16 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    // create log
    OpenLog();
 
-   bool dpkgMultiArch = DpkgHasMultiarchSupport();
+   // what kind of dpkg do we have
+   d->dpkgMultiArch = DpkgHasMultiarchSupport();
+
+   // support subpressing of triggers processing for special
+   // cases like d-i that runs the triggers handling manually
+   bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
+   bool const TriggersPending = _config->FindB("DPkg::TriggersPending", false);
+   if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
+      List.push_back(Item(Item::ConfigurePending, PkgIterator()));
+
 
    // go over each item
    vector<Item>::const_iterator I = List.begin();
@@ -1496,9 +1499,9 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	    if (I->Op == Item::Configure && disappearedPkgs.find(I->Pkg.FullName(true)) != disappearedPkgs.end())
 	       continue;
 	    // We keep this here to allow "smooth" transitions from e.g. multiarch dpkg/ubuntu to dpkg/debian
-	    if (dpkgMultiArch == false && (I->Pkg.Arch() == nativeArch ||
-					   strcmp(I->Pkg.Arch(), "all") == 0 ||
-					   strcmp(I->Pkg.Arch(), "none") == 0))
+	    if (d->dpkgMultiArch == false && (I->Pkg.Arch() == nativeArch ||
+                                              strcmp(I->Pkg.Arch(), "all") == 0 ||
+                                              strcmp(I->Pkg.Arch(), "none") == 0))
 	    {
 	       char const * const name = I->Pkg.Name();
 	       ADDARG(name);
