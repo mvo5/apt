@@ -1319,6 +1319,29 @@ static void RebuildPackageCache()
    }
 }
 
+vector<pkgDPkgPM::Item>::const_iterator 
+pkgDPkgPM::FindNextDpkgOperation(vector<Item>::const_iterator I)
+{
+   vector<Item>::const_iterator J = I;
+   bool const TriggersPending = _config->FindB("DPkg::TriggersPending", false);
+
+      if (TriggersPending == true)
+	 for (; J != List.end(); ++J)
+	 {
+	    if (J->Op == I->Op)
+	       continue;
+	    if (J->Op != Item::TriggersPending)
+	       break;
+	    vector<Item>::const_iterator T = J + 1;
+	    if (T != List.end() && T->Op == I->Op)
+	       continue;
+	    break;
+	 }
+      else
+	 for (; J != List.end() && J->Op == I->Op; ++J)
+	    /* nothing */;
+      return J;
+}
 
 // DPkgPM::Go - Run the sequence					/*{{{*/
 // ---------------------------------------------------------------------
@@ -1369,7 +1392,6 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    // support subpressing of triggers processing for special
    // cases like d-i that runs the triggers handling manually
    bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
-   bool const TriggersPending = _config->FindB("DPkg::TriggersPending", false);
    if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
       List.push_back(Item(Item::ConfigurePending, PkgIterator()));
 
@@ -1380,29 +1402,16 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    vector<Item>::const_iterator I = List.begin();
    while (I != List.end())
    {
-      // Do all actions with the same Op in one run
-      vector<Item>::const_iterator J = I;
-      if (TriggersPending == true)
-	 for (; J != List.end(); ++J)
-	 {
-	    if (J->Op == I->Op)
-	       continue;
-	    if (J->Op != Item::TriggersPending)
-	       break;
-	    vector<Item>::const_iterator T = J + 1;
-	    if (T != List.end() && T->Op == I->Op)
-	       continue;
-	    break;
-	 }
-      else
-	 for (; J != List.end() && J->Op == I->Op; ++J)
-	    /* nothing */;
-
-      Packages.clear();
-
       // start with the baseset of arguments
       unsigned long Size = StartSize;
       Args.erase(Args.begin() + BaseArgs, Args.end());
+      Packages.clear();
+
+      if (pipe(d->dpkg_status_pipe) != 0)
+         return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
+
+      // Do all actions with the same Op in one run
+      vector<Item>::const_iterator J = FindNextDpkgOperation(I);
 
       // Now check if we are within the MaxArgs limit
       //
@@ -1424,9 +1433,6 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 Args.reserve(size);
 	 Packages.reserve(size);
       }
-
-      if (pipe(d->dpkg_status_pipe) != 0)
-         return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
 
 #define ADDARG(X) Args.push_back(X); Size += strlen(X)
 #define ADDARGC(X) Args.push_back(X); Size += sizeof(X) - 1
