@@ -89,6 +89,7 @@ class pkgDPkgPM : public pkgPackageManager
    bool RunDpkgAndMonitorStatusFd(std::vector<char *> &Packages,
                           const std::vector<const char *> &Args);
    std::vector<Item>::const_iterator FindNextDpkgOperation(std::vector<Item>::const_iterator start);
+   std::vector<Item>::const_iterator DoListStuff(std::vector<Item>::const_iterator I, std::vector<char *> &Packages,   std::vector<const char *> &Args, unsigned long &Size);
 
    // Terminal progress 
    void SetupTerminalScrollArea(int nr_scrolled_rows);

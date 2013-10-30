@@ -1343,97 +1343,14 @@ pkgDPkgPM::FindNextDpkgOperation(vector<Item>::const_iterator I)
       return J;
 }
 
-// DPkgPM::Go - Run the sequence					/*{{{*/
-// ---------------------------------------------------------------------
-/* This globs the operations and calls dpkg 
- *
- * If it is called with a progress object apt will report the install
- * progress to this object. It maps the dpkg states a package goes
- * through to human readable (and i10n-able)
- * names and calculates a percentage for each step.
- */
-bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
+vector<pkgDPkgPM::Item>::const_iterator
+pkgDPkgPM::DoListStuff(std::vector<Item>::const_iterator I, std::vector<char *> &Packages,  std::vector<const char *> &Args, unsigned long &Size)
 {
+bool const NoTriggers = _config->FindB("DPkg::NoTriggers", false);
+vector<Item>::const_iterator J = I;
 
-   d->progress = progress;
-
-   if (RunScripts("DPkg::Pre-Invoke") == false)
-      return false;
-
-   if (RunScriptsWithPkgs("DPkg::Pre-Install-Pkgs") == false)
-      return false;
-
-   // for the progress
-   BuildPackagesProgressMap();
-
-   d->stdin_is_dev_null = false;
-
-   // create log
-   OpenLog();
-
-   // what kind of dpkg do we have
-   d->dpkgMultiArch = DpkgHasMultiarchSupport();
-
-   pkgPackageManager::SigINTStop = false;
-   unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
    unsigned int const MaxArgBytes = _config->FindI("Dpkg::MaxArgBytes",32*1024);
-   bool const NoTriggers = _config->FindB("DPkg::NoTriggers", false);
-
-   // Generate the base argument list for dpkg
-   std::vector<const char *> Args;
-   unsigned long StartSize = 0;
-
-   std::string DpkgExecutable = getDpkgExecutable();
-   Args.push_back(DpkgExecutable.c_str());
-   StartSize += DpkgExecutable.length();
-   StartSize += AddDpkgArgumentsFromAptConfig(Args);
-   size_t const BaseArgs = Args.size();
-
-   // support subpressing of triggers processing for special
-   // cases like d-i that runs the triggers handling manually
-   bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
-   if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
-      List.push_back(Item(Item::ConfigurePending, PkgIterator()));
-
-   // keep track of allocated strings for multiarch package names
-   std::vector<char *> Packages;
-
-   // go over each item
-   vector<Item>::const_iterator I = List.begin();
-   while (I != List.end())
-   {
-      // start with the baseset of arguments
-      unsigned long Size = StartSize;
-      Args.erase(Args.begin() + BaseArgs, Args.end());
-      Packages.clear();
-
-      if (pipe(d->dpkg_status_pipe) != 0)
-         return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
-
-      // Do all actions with the same Op in one run
-      vector<Item>::const_iterator J = FindNextDpkgOperation(I);
-
-      // Now check if we are within the MaxArgs limit
-      //
-      // this code below is problematic, because it may happen that
-      // the argument list is split in a way that A depends on B
-      // and they are in the same "--configure A B" run
-      // - with the split they may now be configured in different
-      //   runs, using Immediate-Configure-All can help prevent this.
-      if (J - I > (signed)MaxArgs)
-      {
-	 J = I + MaxArgs;
-	 unsigned long const size = MaxArgs + 10;
-	 Args.reserve(size);
-	 Packages.reserve(size);
-      }
-      else
-      {
-	 unsigned long const size = (J - I) + 10;
-	 Args.reserve(size);
-	 Packages.reserve(size);
-      }
-
+   
 #define ADDARG(X) Args.push_back(X); Size += strlen(X)
 #define ADDARGC(X) Args.push_back(X); Size += sizeof(X) - 1
 
@@ -1491,7 +1408,10 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 for (;I != J && Size < MaxArgBytes; ++I)
 	 {
 	    if (I->File[0] != '/')
-	       return _error->Error("Internal Error, Pathname to install is not absolute '%s'",I->File.c_str());
+            {
+	       _error->Error("Internal Error, Pathname to install is not absolute '%s'",I->File.c_str());
+               return vector<Item>::const_iterator();
+            }
 	    Args.push_back(I->File.c_str());
 	    Size += I->File.length();
 	 }
@@ -1539,11 +1459,107 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 	 }
 	 // skip configure action if all sheduled packages disappeared
 	 if (oldSize == Size)
-	    continue;
+	    return I;
       }
 #undef ADDARG
 
-      J = I;
+      return I;
+}
+
+
+// DPkgPM::Go - Run the sequence					/*{{{*/
+// ---------------------------------------------------------------------
+/* This globs the operations and calls dpkg 
+ *
+ * If it is called with a progress object apt will report the install
+ * progress to this object. It maps the dpkg states a package goes
+ * through to human readable (and i10n-able)
+ * names and calculates a percentage for each step.
+ */
+bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
+{
+   unsigned int const MaxArgs = _config->FindI("Dpkg::MaxArgs",8*1024);
+   
+   d->progress = progress;
+
+   if (RunScripts("DPkg::Pre-Invoke") == false)
+      return false;
+
+   if (RunScriptsWithPkgs("DPkg::Pre-Install-Pkgs") == false)
+      return false;
+
+   // for the progress
+   BuildPackagesProgressMap();
+
+   d->stdin_is_dev_null = false;
+
+   // create log
+   OpenLog();
+
+   // what kind of dpkg do we have
+   d->dpkgMultiArch = DpkgHasMultiarchSupport();
+
+   pkgPackageManager::SigINTStop = false;
+
+
+   // Generate the base argument list for dpkg
+   std::vector<const char *> Args;
+   unsigned long StartSize = 0;
+
+   std::string DpkgExecutable = getDpkgExecutable();
+   Args.push_back(DpkgExecutable.c_str());
+   StartSize += DpkgExecutable.length();
+   StartSize += AddDpkgArgumentsFromAptConfig(Args);
+   size_t const BaseArgs = Args.size();
+
+   // support subpressing of triggers processing for special
+   // cases like d-i that runs the triggers handling manually
+   bool const SmartConf = (_config->Find("PackageManager::Configure", "all") != "all");
+   if (_config->FindB("DPkg::ConfigurePending", SmartConf) == true)
+      List.push_back(Item(Item::ConfigurePending, PkgIterator()));
+
+   // keep track of allocated strings for multiarch package names
+   std::vector<char *> Packages;
+
+   // go over each item
+   vector<Item>::const_iterator I = List.begin();
+   vector<Item>::const_iterator J = I;
+   while (I != List.end())
+   {
+      // start with the baseset of arguments
+      unsigned long Size = StartSize;
+      Args.erase(Args.begin() + BaseArgs, Args.end());
+      Packages.clear();
+
+      if (pipe(d->dpkg_status_pipe) != 0)
+         return _error->Errno("pipe","Failed to create IPC pipe to dpkg");
+
+      // Do all actions with the same Op in one run
+      vector<Item>::const_iterator J = FindNextDpkgOperation(I);
+
+      // Now check if we are within the MaxArgs limit
+      //
+      // this code below is problematic, because it may happen that
+      // the argument list is split in a way that A depends on B
+      // and they are in the same "--configure A B" run
+      // - with the split they may now be configured in different
+      //   runs, using Immediate-Configure-All can help prevent this.
+      if (J - I > (signed)MaxArgs)
+      {
+	 J = I + MaxArgs;
+	 unsigned long const size = MaxArgs + 10;
+	 Args.reserve(size);
+	 Packages.reserve(size);
+      }
+      else
+      {
+	 unsigned long const size = (J - I) + 10;
+	 Args.reserve(size);
+	 Packages.reserve(size);
+      }
+
+      unsigned long const Op = I->Op;
+      J = DoListStuff(I, Packages, Args, Size);
       
       if (_config->FindB("Debug::pkgDPkgPM",false) == true)
       {
