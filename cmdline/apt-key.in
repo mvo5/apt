@@ -84,12 +84,17 @@ net_update() {
     keyring_with_sig=$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING_URI)
     old_mtime=0
     if [ -e $keyring ]; then
-	old_mtime=$(stat -c %Y $keyring)
+	old_mtime=$(stat -c %Y $keyring_with_sig)
     fi
 
     (cd  $DOWNLOAD_KEYRING_DIR; wget --timeout=90 -q -N $ARCHIVE_KEYRING_URI)
     if [ ! -e $keyring_with_sig ]; then
  	return
+    fi
+
+    new_mtime=$(stat -c %Y $keyring_with_sig)
+    if [ $new_mtime -le $old_mtime ]; then
+        return
     fi
 
     # verify downloaded keyring against the master_keyring
@@ -102,11 +107,9 @@ net_update() {
     fi
 
     # and import
-    new_mtime=$(stat -c %Y $keyring)
-    if [ $new_mtime -ne $old_mtime ]; then
-	echo "Checking for new archive signing keys now"
-	$GPG_CMD --quiet --batch --keyring $keyring --export | $GPG --import
-    fi
+    echo "Checking for new archive signing keys now"
+    $GPG_CMD --quiet --batch --keyring $keyring --export | $GPG --import
+
 }
 
 update() {

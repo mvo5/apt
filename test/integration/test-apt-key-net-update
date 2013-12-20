@@ -74,3 +74,6 @@ sign_archive_keyring test-master-keyring 'Test Archive Master Key'
 ensure_apt_key_net_update_works
 
 
+# ensure additional apt-key net-update does not produce any output
+testempty "" aptkey --fakeroot net-update
+

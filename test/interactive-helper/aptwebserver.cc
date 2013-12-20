@@ -313,7 +313,7 @@ bool parseFirstLine(int const client, std::string const &request,	/*{{{*/
 {
    if (strncmp(request.c_str(), "HEAD ", 5) == 0)
       sendContent = false;
-   if (strncmp(request.c_str(), "GET ", 4) != 0)
+   else if (strncmp(request.c_str(), "GET ", 4) != 0)
    {
       sendError(client, 501, request, true);
       return false;
