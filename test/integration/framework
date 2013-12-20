@@ -923,6 +923,26 @@ checkdiff() {
 	fi
 }
 
+testfileexists() {
+        local FILE="$1"
+        msgtest "Test for existance of file" "$FILE"
+        if [ -e "$FILE" ]; then
+                msgpass
+        else
+                msgfail
+        fi
+}
+
+testfilenotexists() {
+        local FILE="$1"
+        msgtest "Test for NOT existance of file" "$FILE"
+        if [ ! -e "$FILE" ]; then
+                msgpass
+        else
+                msgfail
+        fi
+}
+
 testfileequal() {
 	local FILE="$1"
 	shift

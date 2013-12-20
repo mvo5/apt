@@ -9,35 +9,64 @@ configarchitecture "i386"
 changetowebserver
 
 # setup env
-mkdir -p var/lib/apt/keyrings
-mkdir -p usr/share/keyrings
+mkdir -p rootdir/var/lib/apt/keyrings
+mkdir -p rootdir/usr/share/keyrings
 
 # install the fake master keyring
-install -m0644 keys/test-master-keyring.pub usr/share/keyrings
-echo "APT::Key::MasterKeyring \"${TMPWORKINGDIRECTORY}/usr/share/keyrings/test-master-keyring.pub\";" >> ./aptconfig.conf
+install -m0644 keys/test-master-keyring.pub rootdir/usr/share/keyrings
+echo "APT::Key::MasterKeyring \"${TMPWORKINGDIRECTORY}/rootdir/usr/share/keyrings/test-master-keyring.pub\";" >> ./aptconfig.conf
 
-# setup archive-keyring 
-mkdir -p aptarchive/ubuntu/project
-install -m0644 keys/test-archive-keyring.pub aptarchive/ubuntu/project/
-echo 'APT::Key::ArchiveKeyringURI "http://localhost:8080/ubuntu/project/test-archive-keyring.pub";' >> ./aptconfig.conf
+# setup local fetching
+echo 'APT::Key::ArchiveKeyringURI "http://localhost:8080/ubuntu/project/test-archive-keyring.signed";' >> ./aptconfig.conf
 echo 'APT::Key::Net-Update-Enabled "1";' >> ./aptconfig.conf
 
-# test against the "real" webserver
-testequal 'Checking for new archive signing keys now
-gpg: key F68C85A3: public key "Test Automatic Archive Signing Key <ftpmaster@example.com>" imported
-gpg: Total number processed: 1
-gpg:               imported: 1  (RSA: 1)' aptkey --fakeroot net-update
+#test 1
 
-
-# now try a different one
-# setup archive-keyring 
+# create incorrect signed keyring
 mkdir -p aptarchive/ubuntu/project
-install -m0644 keys/marvinparanoid.pub aptarchive/ubuntu/project/
-echo 'APT::Key::ArchiveKeyringURI "http://localhost:8080/ubuntu/project/marvinparanoid.pub";' >> ./aptconfig.conf
-echo 'APT::Key::Net-Update-Enabled "1";' >> ./aptconfig.conf
+gpg --yes --no-default-keyring \
+  --secret-keyring ./keys/marvinparanoid.sec \
+  --keyring ./keys/marvinparanoid.pub \
+  --default-key 'Marvin Paranoid' \
+  --sign \
+  -o aptarchive/ubuntu/project/test-archive-keyring.signed \
+  keys/test-archive-keyring.pub
 
-# test against the "real" webserver
-testequal "Checking for new archive signing keys now
-Key 'E8525D47528144E2' not added. It is not signed with a master key" aptkey --fakeroot net-update
+# ensure that aptkey net-update fails
+msgtest "Ensure apt-key net-update fails with incorrectly signed key"
+# FIXME: check for 
+#        "Failed to verify downloaded keyring" message in apt-key net-update
+if aptkey --fakeroot net-update; then
+    msgfail
+fi
+
+msgtest "Ensure incorrect signed key is *not* added"
+aptkey list| grep -v -q "Test Automatic Archive Signing Key" && msgpass || msgfail
+
+testfilenotexists rootdir/var/lib/apt/keyrings/test-archive-keyring.signed
+testfilenotexists rootdir/var/lib/apt/keyrings/ubuntu-archive-keyring.gpg
+
+
+# test 2
+
+# and now try adding a correct one
+# try adding a wrongly signed one
+gpg --yes --no-default-keyring \
+  --secret-keyring ./keys/test-master-keyring.sec \
+  --keyring ./keys/test-master-keyring.pub \
+  --default-key 'Test Archive Master Key' \
+  --sign \
+  -o aptarchive/ubuntu/project/test-archive-keyring.signed \
+  keys/test-archive-keyring.pub
+
+msgtest "Ensure apt-key net-update works"
+aptkey --fakeroot net-update && msgpass || msgfail
+
+msgtest "Ensure key is added"
+aptkey list|grep -q "Test Automatic Archive Signing Key" && msgpass || msgfail
+
+testfileexists rootdir/var/lib/apt/keyrings/test-archive-keyring.signed
+testfileexists rootdir/var/lib/apt/keyrings/ubuntu-archive-keyring.gpg
+
 
 
