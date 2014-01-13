@@ -46,6 +46,7 @@ class HashString
 
    // internal helper
    std::string GetHashForFile(std::string filename) const;
+   std::string GetHashForString(const std::string &input) const;
 
  public:
    HashString(std::string Type, std::string Hash);
@@ -64,6 +65,8 @@ class HashString
    // generate a hash string from the given filename
    bool FromFile(std::string filename);
 
+   // generate a hash string from the given input string
+   bool FromString(const std::string &input);
 
    // helper
    std::string toStr() const;                    // convert to str as "type:hash"

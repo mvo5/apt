@@ -317,14 +317,24 @@ bool ShowSrcPackage(CommandLine &CmdL)					/*{{{*/
 
       pkgSrcRecords::Parser *Parse;
       bool found_this = false;
+
+      // avoid showing idential records again
+      std::set<std::string> seen;
       while ((Parse = SrcRecs.Find(*I,false)) != 0) {
 	 // SrcRecs.Find() will find both binary and source names
 	 if (_config->FindB("APT::Cache::Only-Source", false) == true)
 	    if (Parse->Package() != *I)
 	       continue;
-	 std::cout << Parse->AsStr() << std::endl;;
-	 found = true;
-	 found_this = true;
+
+         HashString h;
+         h.FromString(Parse->AsStr());
+         if (std::find(seen.begin(), seen.end(), h.toStr()) == seen.end())
+         {
+            std::cout << Parse->AsStr() << std::endl;;
+            found = true;
+            found_this = true;
+            seen.insert(h.toStr());
+        }
       }
       if (found_this == false) {
 	 _error->Warning(_("Unable to locate package %s"),*I);

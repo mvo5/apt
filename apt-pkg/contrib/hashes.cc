@@ -119,6 +119,48 @@ std::string HashString::GetHashForFile(std::string filename) const      /*{{{*/
    return fileHash;
 }
 									/*}}}*/
+bool HashString::FromString(const std::string &input)          		/*{{{*/
+{
+   // pick the strongest hash
+   if (Type == "")
+      Type = _SupportedHashes[0];
+
+   Hash = GetHashForString(input);
+   return true;
+}
+									/*}}}*/
+std::string HashString::GetHashForString(const std::string &input) const/*{{{*/
+{
+   std::string stringHash;
+
+   if(strcasecmp(Type.c_str(), "MD5Sum") == 0)
+   {
+      MD5Summation MD5;
+      MD5.Add(input.c_str(), input.size());
+      stringHash = (std::string)MD5.Result();
+   }
+   else if (strcasecmp(Type.c_str(), "SHA1") == 0)
+   {
+      SHA1Summation SHA1;
+      SHA1.Add(input.c_str(), input.size());
+      stringHash = (std::string)SHA1.Result();
+   }
+   else if (strcasecmp(Type.c_str(), "SHA256") == 0)
+   {
+      SHA256Summation SHA256;
+      SHA256.Add(input.c_str(), input.size());
+      stringHash = (std::string)SHA256.Result();
+   }
+   else if (strcasecmp(Type.c_str(), "SHA512") == 0)
+   {
+      SHA512Summation SHA512;
+      SHA512.Add(input.c_str(), input.size());
+      stringHash = (std::string)SHA512.Result();
+   }
+
+   return stringHash;
+}
+									/*}}}*/
 const char** HashString::SupportedHashes()				/*{{{*/
 {
    return _SupportedHashes;
