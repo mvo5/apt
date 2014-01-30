@@ -43,6 +43,27 @@ class pkgAcquire;
 class pkgIndexFile;
 class metaIndex;
 
+class pkgSourceEntry
+{
+ protected:
+ public:
+   pkgSourceEntry(std::string aType, std::string aURI, std::string aSuite,
+                  std::vector<std::string> aSections,
+                  std::map<std::string, std::string> aOptions) 
+      : Type(aType), URI(aURI), Suite(aSuite), Sections(aSections), 
+        Options(aOptions) {};
+
+   std::string toStr();
+
+   // public FTW!
+   std::string Type;
+   std::string URI;
+   std::string Suite;
+   std::vector<std::string> Sections;
+   std::map<std::string, std::string> Options;
+
+};
+
 class pkgSourceList
 {
    public:
@@ -70,7 +91,8 @@ class pkgSourceList
 			     unsigned long const &CurLine,std::string const &File) const;
       virtual bool CreateItem(std::vector<metaIndex *> &List,std::string const &URI,
 			      std::string const &Dist,std::string const &Section,
-			      std::map<std::string, std::string> const &Options) const = 0;
+			      std::map<std::string, std::string> const &Options,
+                              pkgSourceEntry *SrcEntry) const = 0;
       Type();
       virtual ~Type() {};
    };

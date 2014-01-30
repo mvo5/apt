@@ -33,6 +33,7 @@ class metaIndex
    virtual std::string GetURI() const {return URI;}
    virtual std::string GetDist() const {return Dist;}
    virtual const char* GetType() const {return Type;}
+   virtual std::string GetSourceEntry() const {return "";}
 
    // interface to to query it
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)

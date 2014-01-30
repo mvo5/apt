@@ -61,6 +61,13 @@ LIB_MAKES = apt-pkg/makefile
 SOURCE = apt-mark.cc
 include $(PROGRAM_H)
 
+# The apt-sources program
+PROGRAM=apt-sources
+SLIBS = -lapt-pkg -lapt-private $(INTLLIBS)
+LIB_MAKES = apt-pkg/makefile
+SOURCE = apt-sources.cc
+include $(PROGRAM_H)
+
 # The apt-report-mirror-failure program
 #SOURCE=apt-report-mirror-failure
 #TO=$(BIN)

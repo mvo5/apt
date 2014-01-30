@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture "i386"
+
+cat > rootdir/etc/apt/sources.list <<EOF
+deb http://ftp.debian.org/debian unstable main contrib
+deb-src http://ftp.debian.org/debian unstable main
+EOF
+
+testequal "deb http://ftp.debian.org/debian/ unstable main contrib
+deb-src http://ftp.debian.org/debian/ unstable main" aptsources list
+

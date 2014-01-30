@@ -3,9 +3,11 @@
 #define PKGLIB_DEBMETAINDEX_H
 
 #include <apt-pkg/metaindex.h>
+#include <apt-pkg/sourcelist.h>
 #include <apt-pkg/init.h>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -30,7 +32,14 @@ class debReleaseIndex : public metaIndex {
    std::map<std::string, std::vector<debSectionEntry const*> > ArchEntries;
    enum { ALWAYS_TRUSTED, NEVER_TRUSTED, CHECK_TRUST } Trusted;
 
+   std::vector<std::string> sections;
+   bool has_source;
+
    public:
+
+   // public FTW
+   std::set<pkgSourceEntry *> SrcEntries;
+
 
    debReleaseIndex(std::string const &URI, std::string const &Dist);
    debReleaseIndex(std::string const &URI, std::string const &Dist, bool const Trusted);
@@ -44,6 +53,8 @@ class debReleaseIndex : public metaIndex {
    std::string MetaIndexInfo(const char *Type) const;
    std::string MetaIndexFile(const char *Types) const;
    std::string MetaIndexURI(const char *Type) const;
+
+   virtual std::string GetSourceEntry() const;
 
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
    virtual std::string LocalFileName() const;

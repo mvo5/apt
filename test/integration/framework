@@ -107,6 +107,7 @@ aptconfig() { runapt apt-config "$@"; }
 aptcache() { runapt apt-cache "$@"; }
 aptcdrom() { runapt apt-cdrom "$@"; }
 aptget() { runapt apt-get "$@"; }
+aptsources() { runapt apt-sources "$@"; }
 aptftparchive() { runapt apt-ftparchive "$@"; }
 aptkey() { runapt apt-key "$@"; }
 aptmark() { runapt apt-mark "$@"; }

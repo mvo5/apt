@@ -241,6 +241,20 @@ vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
 
 	return IndexTargets;
 }
+
+std::string debReleaseIndex::GetSourceEntry() const
+{
+   std::string output;
+   for (std::set<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
+        I != SrcEntries.end(); ++I)
+      if (I == SrcEntries.begin())
+         strprintf(output, "%s", (*I)->toStr().c_str());
+      else
+         strprintf(output, "%s\n%s", output.c_str(), (*I)->toStr().c_str());
+
+   return output;
+}
+
 									/*}}}*/
 bool debReleaseIndex::GetIndexes(pkgAcquire *Owner, bool const &GetAll) const
 {
@@ -387,7 +401,9 @@ class debSLTypeDebian : public pkgSourceList::Type
 
    bool CreateItemInternal(vector<metaIndex *> &List, string const &URI,
 			   string const &Dist, string const &Section,
-			   bool const &IsSrc, map<string, string> const &Options) const
+			   bool const &IsSrc, 
+                           map<string, string> const &Options,
+                           pkgSourceEntry *aSrcEntry) const
    {
       // parse arch=, arch+= and arch-= settings
       map<string, string>::const_iterator arch = Options.find("arch");
@@ -425,7 +441,7 @@ class debSLTypeDebian : public pkgSourceList::Type
 	 if (trusted != Options.end())
 	    Deb->SetTrusted(StringToBool(trusted->second, false));
 
-	 /* This check insures that there will be only one Release file
+	 /* This check ensures that there will be only one Release file
 	    queued for all the Packages files and Sources files it
 	    corresponds to. */
 	 if (Deb->GetURI() == URI && Deb->GetDist() == Dist)
@@ -439,16 +455,20 @@ class debSLTypeDebian : public pkgSourceList::Type
 	       else
 		  Deb->PushSectionEntry(Archs, new debReleaseIndex::debSectionEntry(Section, IsSrc));
 	    }
+            Deb->SrcEntries.insert(aSrcEntry);
 	    return true;
 	 }
       }
-
+      
       // No currently created Release file indexes this entry, so we create a new one.
       debReleaseIndex *Deb;
+
       if (trusted != Options.end())
 	 Deb = new debReleaseIndex(URI, Dist, StringToBool(trusted->second, false));
       else
 	 Deb = new debReleaseIndex(URI, Dist);
+      
+      Deb->SrcEntries.insert(aSrcEntry);
 
       if (IsSrc == true)
 	 Deb->PushSectionEntry ("source", new debReleaseIndex::debSectionEntry(Section, IsSrc));
@@ -470,9 +490,10 @@ class debSLTypeDeb : public debSLTypeDebian
 
    bool CreateItem(vector<metaIndex *> &List, string const &URI,
 		   string const &Dist, string const &Section,
-		   std::map<string, string> const &Options) const
+		   std::map<string, string> const &Options,
+                   pkgSourceEntry *SrcEntry) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, false, Options);
+      return CreateItemInternal(List, URI, Dist, Section, false, Options, SrcEntry);
    }
 
    debSLTypeDeb()
@@ -488,9 +509,11 @@ class debSLTypeDebSrc : public debSLTypeDebian
 
    bool CreateItem(vector<metaIndex *> &List, string const &URI,
 		   string const &Dist, string const &Section,
-		   std::map<string, string> const &Options) const
+		   std::map<string, string> const &Options,
+                   pkgSourceEntry *SrcEntry) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, true, Options);
+      return CreateItemInternal(List, URI, Dist, Section, true, Options,
+                                SrcEntry);
    }
    
    debSLTypeDebSrc()

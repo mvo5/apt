@@ -108,6 +108,7 @@ bool pkgSourceList::Type::ParseStanza(vector<metaIndex *> &List,
    std::vector<std::string> list_uris = StringSplit(URIS, " ");
    std::vector<std::string> list_dist = StringSplit(Suite, " ");
    std::vector<std::string> list_section = StringSplit(Section, " ");
+   std::string aType = Name;
    
    for (std::vector<std::string>::const_iterator U = list_uris.begin();
         U != list_uris.end(); U++)
@@ -122,10 +123,12 @@ bool pkgSourceList::Type::ParseStanza(vector<metaIndex *> &List,
       for (std::vector<std::string>::const_iterator I = list_dist.begin();
            I != list_dist.end(); I++)
       {
+         pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, (*I), list_section, Options);
+
          for (std::vector<std::string>::const_iterator J = list_section.begin();
               J != list_section.end(); J++)
          {
-            if (CreateItem(List, URI, (*I), (*J), Options) == false)
+            if (CreateItem(List, URI, (*I), (*J), Options, SrcEntry) == false)
             {
                return false;
             }
@@ -192,6 +195,7 @@ bool pkgSourceList::Type::ParseLine(vector<metaIndex *> &List,
    string URI;
    string Dist;
    string Section;
+   std::vector<std::string> aSection;
 
    if (ParseQuoteWord(Buffer,URI) == false)
       return _error->Error(_("Malformed line %lu in source list %s (URI)"),CurLine,File.c_str());
@@ -201,26 +205,36 @@ bool pkgSourceList::Type::ParseLine(vector<metaIndex *> &List,
    if (FixupURI(URI) == false)
       return _error->Error(_("Malformed line %lu in source list %s (URI parse)"),CurLine,File.c_str());
    
+   std::string aType = Name;
    // Check for an absolute dists specification.
    if (Dist.empty() == false && Dist[Dist.size() - 1] == '/')
    {
       if (ParseQuoteWord(Buffer,Section) == true)
 	 return _error->Error(_("Malformed line %lu in source list %s (absolute dist)"),CurLine,File.c_str());
       Dist = SubstVar(Dist,"$(ARCH)",_config->Find("APT::Architecture"));
-      return CreateItem(List, URI, Dist, Section, Options);
+      aSection.push_back(Section);
+      pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, Dist, aSection, Options);
+      return CreateItem(List, URI, Dist, Section, Options, SrcEntry);
    }
    
+   // collect sections
+   std::vector<std::string> sections;
    // Grab the rest of the dists
    if (ParseQuoteWord(Buffer,Section) == false)
       return _error->Error(_("Malformed line %lu in source list %s (dist parse)"),CurLine,File.c_str());
-   
+
    do
    {
-      if (CreateItem(List, URI, Dist, Section, Options) == false)
-	 return false;
-   }
-   while (ParseQuoteWord(Buffer,Section) == true);
-   
+      sections.push_back(Section);
+   } while (ParseQuoteWord(Buffer,Section) == true);
+
+   // create metaindexes
+   pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, Dist, sections, Options);
+   for (std::vector<std::string>::const_iterator I = sections.begin();
+        I != sections.end(); ++I)
+      if (CreateItem(List, URI, Dist, Section, Options, SrcEntry) == false)
+         return false;
+
    return true;
 }
 									/*}}}*/
@@ -493,3 +507,18 @@ time_t pkgSourceList::GetLastModifiedTime()
 }
 									/*}}}*/
 
+// pkgSourceEntry::toStr()						/*{{{*/
+// ----------------------------------------------------------------------------
+/* */
+std::string pkgSourceEntry::toStr()
+{
+   // FIXME: output Options
+
+   std::string output;
+   strprintf(output, "%s %s %s", Type.c_str(),URI.c_str(), Suite.c_str());
+   for (std::vector<std::string>::const_iterator J = Sections.begin();
+        J != Sections.end(); ++J)
+      strprintf(output, "%s %s", output.c_str(), (*J).c_str());
+   return output;
+}
+									/*}}}*/
