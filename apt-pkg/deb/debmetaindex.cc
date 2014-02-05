@@ -177,6 +177,10 @@ debReleaseIndex::~debReleaseIndex() {
 		for (vector<const debSectionEntry *>::const_iterator S = A->second.begin();
 		     S != A->second.end(); ++S)
 			delete *S;
+
+        for (std::set<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
+             I != SrcEntries.end(); ++I)
+           delete *I;
 }
 
 vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
