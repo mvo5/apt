@@ -512,10 +512,22 @@ time_t pkgSourceList::GetLastModifiedTime()
 /* */
 std::string pkgSourceEntry::toStr()
 {
-   // FIXME: output Options
+   std::string output, OptionsStr;
 
-   std::string output;
-   strprintf(output, "%s %s %s", Type.c_str(),URI.c_str(), Suite.c_str());
+   if (Options.size() > 0) 
+   {
+      std::map<std::string, std::string>::const_iterator I;
+      for(I = Options.begin(); I != Options.end(); ++I)
+      {
+         strprintf(OptionsStr, "%s,%s=%s", OptionsStr.c_str(), (*I).first.c_str(), (*I).second.c_str());
+      }
+      strprintf(OptionsStr, "[%s] ",
+                // cut of the leading ","
+                OptionsStr.substr(1, OptionsStr.size()).c_str());
+   }
+
+   strprintf(output, "%s %s%s %s", Type.c_str(), OptionsStr.c_str(), URI.c_str(), Suite.c_str());
+
    for (std::vector<std::string>::const_iterator J = Sections.begin();
         J != Sections.end(); ++J)
       strprintf(output, "%s %s", output.c_str(), (*J).c_str());
