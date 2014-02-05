@@ -89,6 +89,7 @@ std::string debReleaseIndex::LocalFileName() const
 
 void debReleaseIndex::AddSourceEntry(pkgSourceEntry *aSrcEntry)
 {
+   // no std::set because we want insert-ordering
    if(std::find(SrcEntries.begin(), SrcEntries.end(), aSrcEntry) == SrcEntries.end())
       SrcEntries.push_back(aSrcEntry);
 }

@@ -19,6 +19,10 @@
 #include <apt-private/private-output.h>
 #include <apt-private/private-cmndline.h>
 
+#if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR < 13)
+#include <apt-pkg/debmetaindex.h>
+#endif
+
 #include <apti18n.h>
 									/*}}}*/
 using namespace std;
@@ -35,7 +39,13 @@ bool DoList(CommandLine &CmdL)
        I != SrcList.end(); 
        ++I)
    {
+#if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
       std::cout << (*I)->GetSourceEntry() << std::endl;
+#else
+      // ugly, but we avoid a ABI break
+      debReleaseIndex *R = (debReleaseIndex*)(*I);
+      std::cout << R->GetSourceEntry() << std::endl;
+#endif
    }
 
    return true;
