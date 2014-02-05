@@ -87,6 +87,12 @@ std::string debReleaseIndex::LocalFileName() const
 }
 #endif
 
+void debReleaseIndex::AddSourceEntry(pkgSourceEntry *aSrcEntry)
+{
+   if(std::find(SrcEntries.begin(), SrcEntries.end(), aSrcEntry) == SrcEntries.end())
+      SrcEntries.push_back(aSrcEntry);
+}
+
 string debReleaseIndex::IndexURISuffix(const char *Type, string const &Section, string const &Arch) const
 {
    string Res ="";
@@ -178,7 +184,7 @@ debReleaseIndex::~debReleaseIndex() {
 		     S != A->second.end(); ++S)
 			delete *S;
 
-        for (std::set<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
+        for (std::vector<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
              I != SrcEntries.end(); ++I)
            delete *I;
 }
@@ -249,7 +255,7 @@ vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
 std::string debReleaseIndex::GetSourceEntry() const
 {
    std::string output;
-   for (std::set<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
+   for (std::vector<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
         I != SrcEntries.end(); ++I)
       if (I == SrcEntries.begin())
          strprintf(output, "%s", (*I)->toStr().c_str());
@@ -459,7 +465,7 @@ class debSLTypeDebian : public pkgSourceList::Type
 	       else
 		  Deb->PushSectionEntry(Archs, new debReleaseIndex::debSectionEntry(Section, IsSrc));
 	    }
-            Deb->SrcEntries.insert(aSrcEntry);
+            Deb->AddSourceEntry(aSrcEntry);
 	    return true;
 	 }
       }
@@ -471,9 +477,8 @@ class debSLTypeDebian : public pkgSourceList::Type
 	 Deb = new debReleaseIndex(URI, Dist, StringToBool(trusted->second, false));
       else
 	 Deb = new debReleaseIndex(URI, Dist);
+      Deb->AddSourceEntry(aSrcEntry);
       
-      Deb->SrcEntries.insert(aSrcEntry);
-
       if (IsSrc == true)
 	 Deb->PushSectionEntry ("source", new debReleaseIndex::debSectionEntry(Section, IsSrc));
       else

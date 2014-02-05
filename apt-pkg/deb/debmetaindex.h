@@ -35,11 +35,10 @@ class debReleaseIndex : public metaIndex {
    std::vector<std::string> sections;
    bool has_source;
 
+   protected:
+   std::vector<pkgSourceEntry *> SrcEntries;
+
    public:
-
-   // public FTW
-   std::set<pkgSourceEntry *> SrcEntries;
-
 
    debReleaseIndex(std::string const &URI, std::string const &Dist);
    debReleaseIndex(std::string const &URI, std::string const &Dist, bool const Trusted);
@@ -59,6 +58,7 @@ class debReleaseIndex : public metaIndex {
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
    virtual std::string LocalFileName() const;
 #endif
+   void AddSourceEntry(pkgSourceEntry *aSrcEntry);
 
    std::string IndexURI(const char *Type, std::string const &Section, std::string const &Arch="native") const;
    std::string IndexURISuffix(const char *Type, std::string const &Section, std::string const &Arch="native") const;
