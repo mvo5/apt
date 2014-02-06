@@ -17,6 +17,7 @@ using std::string;
 class pkgAcquire;
 class pkgCacheGenerator;
 class OpProgress;
+class pkgSourceEntry;
 
 class metaIndex
 {
@@ -34,7 +35,7 @@ class metaIndex
    virtual std::string GetDist() const {return Dist;}
    virtual const char* GetType() const {return Type;}
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
-   virtual std::string GetSourceEntry() const {return "";}
+   virtual const std::vector<pkgSourceEntry *> GetSourceEntries() const = 0;
 
    // interface to to query it
    // returns the path of the local file (or "" if its not available)

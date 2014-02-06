@@ -54,6 +54,7 @@ class pkgSourceEntry
         Options(aOptions) {};
 
    std::string toStr();
+   std::string toDeb822();
 
    // public FTW!
    std::string Type;

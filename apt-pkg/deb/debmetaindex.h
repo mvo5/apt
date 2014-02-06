@@ -55,10 +55,10 @@ class debReleaseIndex : public metaIndex {
    void AddSourceEntry(pkgSourceEntry *aSrcEntry);
 
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
-   virtual std::string GetSourceEntry() const;
+   virtual const std::vector<pkgSourceEntry *> GetSourceEntries() const;
    virtual std::string LocalFileName() const;
 #else
-   std::string GetSourceEntry() const;
+   const std::vector<pkgSourceEntry *> GetSourceEntries() const;
 #endif
 
    std::string IndexURI(const char *Type, std::string const &Section, std::string const &Arch="native") const;

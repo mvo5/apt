@@ -534,3 +534,36 @@ std::string pkgSourceEntry::toStr()
    return output;
 }
 									/*}}}*/
+
+// pkgSourceEntry::toDeb822()						/*{{{*/
+// ----------------------------------------------------------------------------
+/* */
+std::string pkgSourceEntry::toDeb822()
+{
+   std::string output;
+
+   std::string SectionsStr;
+   for (std::vector<std::string>::const_iterator J = Sections.begin();
+        J != Sections.end(); ++J)
+      strprintf(output, "%s %s", SectionsStr.c_str(), (*J).c_str());
+
+   strprintf(output, "Types: %s\nURIs: %s\nSuites: %s\nSections: %s", Type.c_str(), URI.c_str(), Suite.c_str(), SectionsStr.c_str());
+
+   // FIXME: Options!
+#if 0
+   if (Options.size() > 0) 
+   {
+      std::map<std::string, std::string>::const_iterator I;
+      for(I = Options.begin(); I != Options.end(); ++I)
+      {
+         strprintf(OptionsStr, "%s,%s=%s", OptionsStr.c_str(), (*I).first.c_str(), (*I).second.c_str());
+      }
+      strprintf(OptionsStr, "[%s] ",
+                // cut of the leading ","
+                OptionsStr.substr(1, OptionsStr.size()).c_str());
+   }
+#endif
+
+   return output;
+}
+									/*}}}*/

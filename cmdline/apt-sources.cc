@@ -27,6 +27,21 @@
 									/*}}}*/
 using namespace std;
 
+// SrcEntriesToStr - Turn a vector of pkgSourceEntries to a string     /*{{{*/
+// ---------------------------------------------------------------------
+/* FIXME: move into apt-private(?) */
+std::string SrcEntriesToStr(const std::vector<pkgSourceEntry *> SrcEntries)
+{
+   std::string output;
+   for (std::vector<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
+        I != SrcEntries.end(); ++I)
+      if (I == SrcEntries.begin())
+         strprintf(output, "%s", (*I)->toStr().c_str());
+      else
+         strprintf(output, "%s\n%s", output.c_str(), (*I)->toStr().c_str());
+   return output;
+}
+									/*}}}*/
 
 // DoList - Show sources.list as lines					/*{{{*/
 // ---------------------------------------------------------------------
@@ -40,11 +55,11 @@ bool DoList(CommandLine &CmdL)
        ++I)
    {
 #if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
-      std::cout << (*I)->GetSourceEntry() << std::endl;
+      std::cout << SrcEntriesToStr((*I)->GetSourceEntries()) << std::endl;
 #else
       // ugly, but we avoid a ABI break
       debReleaseIndex *R = (debReleaseIndex*)(*I);
-      std::cout << R->GetSourceEntry() << std::endl;
+      std::cout << SrcEntriesToStr(R->GetSourceEntries()) << std::endl;
 #endif
    }
 

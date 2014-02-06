@@ -253,17 +253,9 @@ vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
 	return IndexTargets;
 }
 
-std::string debReleaseIndex::GetSourceEntry() const
+const std::vector<pkgSourceEntry *> debReleaseIndex::GetSourceEntries() const
 {
-   std::string output;
-   for (std::vector<pkgSourceEntry *>::const_iterator I = SrcEntries.begin();
-        I != SrcEntries.end(); ++I)
-      if (I == SrcEntries.begin())
-         strprintf(output, "%s", (*I)->toStr().c_str());
-      else
-         strprintf(output, "%s\n%s", output.c_str(), (*I)->toStr().c_str());
-
-   return output;
+   return SrcEntries;
 }
 
 									/*}}}*/
