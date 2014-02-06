@@ -124,15 +124,8 @@ bool pkgSourceList::Type::ParseStanza(vector<metaIndex *> &List,
            I != list_dist.end(); I++)
       {
          pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, (*I), list_section, Options);
-
-         for (std::vector<std::string>::const_iterator J = list_section.begin();
-              J != list_section.end(); J++)
-         {
-            if (CreateItem(List, URI, (*I), (*J), Options, SrcEntry) == false)
-            {
-               return false;
-            }
-         }
+         if (CreateItem(List, SrcEntry) == false)
+            return false;
       }
    }
    return true;
@@ -214,7 +207,7 @@ bool pkgSourceList::Type::ParseLine(vector<metaIndex *> &List,
       Dist = SubstVar(Dist,"$(ARCH)",_config->Find("APT::Architecture"));
       aSection.push_back(Section);
       pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, Dist, aSection, Options);
-      return CreateItem(List, URI, Dist, Section, Options, SrcEntry);
+      return CreateItem(List, SrcEntry);
    }
    
    // collect sections
@@ -230,10 +223,8 @@ bool pkgSourceList::Type::ParseLine(vector<metaIndex *> &List,
 
    // create metaindexes
    pkgSourceEntry *SrcEntry = new pkgSourceEntry(aType, URI, Dist, sections, Options);
-   for (std::vector<std::string>::const_iterator I = sections.begin();
-        I != sections.end(); ++I)
-      if (CreateItem(List, URI, Dist, Section, Options, SrcEntry) == false)
-         return false;
+   if (CreateItem(List, SrcEntry) == false)
+      return false;
 
    return true;
 }

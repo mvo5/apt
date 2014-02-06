@@ -402,10 +402,22 @@ class debSLTypeDebian : public pkgSourceList::Type
 {
    protected:
 
-   bool CreateItemInternal(vector<metaIndex *> &List, string const &URI,
-			   string const &Dist, string const &Section,
-			   bool const &IsSrc, 
-                           map<string, string> const &Options,
+   bool CreateItemInternal(vector<metaIndex *> &List,
+			   bool const &IsSrc,
+                           pkgSourceEntry *Entry) const
+   {
+      bool res = true;
+      for (std::vector<std::string>::const_iterator I = Entry->Sections.begin();
+           I != Entry->Sections.end(); ++I)
+         res &= CreateItemForSection(List, Entry->URI, Entry->Suite, (*I), false, Entry->Options, Entry);
+      return res;
+   }
+
+   bool CreateItemForSection(vector<metaIndex *> &List, string const &URI,
+                             string const &Dist, string const &Section,
+                             bool const &IsSrc,
+                             map<string, string> const &Options,
+
                            pkgSourceEntry *aSrcEntry) const
    {
       // parse arch=, arch+= and arch-= settings
@@ -490,12 +502,10 @@ class debSLTypeDeb : public debSLTypeDebian
 {
    public:
 
-   bool CreateItem(vector<metaIndex *> &List, string const &URI,
-		   string const &Dist, string const &Section,
-		   std::map<string, string> const &Options,
+   bool CreateItem(vector<metaIndex *> &List, 
                    pkgSourceEntry *SrcEntry) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, false, Options, SrcEntry);
+      return CreateItemInternal(List, false, SrcEntry);
    }
 
    debSLTypeDeb()
@@ -509,13 +519,10 @@ class debSLTypeDebSrc : public debSLTypeDebian
 {
    public:
 
-   bool CreateItem(vector<metaIndex *> &List, string const &URI,
-		   string const &Dist, string const &Section,
-		   std::map<string, string> const &Options,
+   bool CreateItem(vector<metaIndex *> &List, 
                    pkgSourceEntry *SrcEntry) const
    {
-      return CreateItemInternal(List, URI, Dist, Section, true, Options,
-                                SrcEntry);
+      return CreateItemInternal(List, true, SrcEntry);
    }
    
    debSLTypeDebSrc()

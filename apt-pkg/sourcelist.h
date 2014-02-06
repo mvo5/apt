@@ -90,9 +90,7 @@ class pkgSourceList
       virtual bool ParseLine(std::vector<metaIndex *> &List,
 			     const char *Buffer,
 			     unsigned long const &CurLine,std::string const &File) const;
-      virtual bool CreateItem(std::vector<metaIndex *> &List,std::string const &URI,
-			      std::string const &Dist,std::string const &Section,
-			      std::map<std::string, std::string> const &Options,
+      virtual bool CreateItem(std::vector<metaIndex *> &List,
                               pkgSourceEntry *SrcEntry) const = 0;
       Type();
       virtual ~Type() {};
