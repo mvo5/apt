@@ -409,7 +409,7 @@ class debSLTypeDebian : public pkgSourceList::Type
       bool res = true;
       for (std::vector<std::string>::const_iterator I = Entry->Sections.begin();
            I != Entry->Sections.end(); ++I)
-         res &= CreateItemForSection(List, Entry->URI, Entry->Suite, (*I), false, Entry->Options, Entry);
+         res &= CreateItemForSection(List, Entry->URI, Entry->Suite, (*I), IsSrc, Entry->Options, Entry);
       return res;
    }
 
@@ -417,8 +417,7 @@ class debSLTypeDebian : public pkgSourceList::Type
                              string const &Dist, string const &Section,
                              bool const &IsSrc,
                              map<string, string> const &Options,
-
-                           pkgSourceEntry *aSrcEntry) const
+                             pkgSourceEntry *aSrcEntry) const
    {
       // parse arch=, arch+= and arch-= settings
       map<string, string>::const_iterator arch = Options.find("arch");
