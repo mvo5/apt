@@ -37,6 +37,19 @@
 
 using std::string;
 
+void LogObserver::StateChanged(pkgCache::PkgIterator const &Pkg, 
+                               unsigned char mode,
+                               int Depth, bool FromUser)
+{
+   const char* ModeStr[] = {"MarkDelete", "MarkKeep",
+                            "MarkInstall", "MarkGarbage",
+                            "MarkPurge"};
+
+   std::clog << OutputInDepth(Depth) << ModeStr[mode] << " " 
+             << Pkg << " FU=" << FromUser << std::endl;
+}
+
+
 // helper for Install-Recommends-Sections and Never-MarkAuto-Sections	/*{{{*/
 static bool 
 ConfigValueInSubTree(const char* SubTree, const char *needle)
@@ -90,7 +103,7 @@ pkgDepCache::ActionGroup::~ActionGroup()
 // ---------------------------------------------------------------------
 /* */
 pkgDepCache::pkgDepCache(pkgCache *pCache,Policy *Plcy) :
-  group_level(0), Cache(pCache), PkgState(0), DepState(0)
+   group_level(0), Cache(pCache), PkgState(0), DepState(0)
 {
    DebugMarker = _config->FindB("Debug::pkgDepCache::Marker", false);
    DebugAutoInstall = _config->FindB("Debug::pkgDepCache::AutoInstall", false);
@@ -98,6 +111,8 @@ pkgDepCache::pkgDepCache(pkgCache *pCache,Policy *Plcy) :
    LocalPolicy = Plcy;
    if (LocalPolicy == 0)
       delLocalPolicy = LocalPolicy = new Policy;
+   if(DebugMarker)
+      AddObserver(new LogObserver());
 }
 									/*}}}*/
 // DepCache::~pkgDepCache - Destructor					/*{{{*/
@@ -793,9 +808,7 @@ bool pkgDepCache::MarkKeep(PkgIterator const &Pkg, bool Soft, bool FromUser,
    if(FromUser && !P.Marked)
      P.Flags &= ~Flag::Auto;
 #endif
-
-   if (DebugMarker == true)
-      std::clog << OutputInDepth(Depth) << "MarkKeep " << Pkg << " FU=" << FromUser << std::endl;
+   NotifyObservers(Pkg, ModeKeep, Depth, FromUser);
 
    RemoveSizes(Pkg);
    RemoveStates(Pkg);
@@ -839,8 +852,7 @@ bool pkgDepCache::MarkDelete(PkgIterator const &Pkg, bool rPurge,
 
    ActionGroup group(*this);
 
-   if (DebugMarker == true)
-      std::clog << OutputInDepth(Depth) << (rPurge ? "MarkPurge " : "MarkDelete ") << Pkg << " FU=" << FromUser << std::endl;
+   NotifyObservers(Pkg, rPurge ? ModePurge : ModeDelete, Depth, FromUser);
 
    RemoveSizes(Pkg);
    RemoveStates(Pkg);
@@ -1091,11 +1103,10 @@ bool pkgDepCache::MarkInstall(PkgIterator const &Pkg,bool AutoInst,
    Update(Pkg);
    AddSizes(Pkg);
 
+   NotifyObservers(Pkg, ModeInstall, Depth, FromUser);
+
    if (AutoInst == false || _config->Find("APT::Solver", "internal") != "internal")
       return true;
-
-   if (DebugMarker == true)
-      std::clog << OutputInDepth(Depth) << "MarkInstall " << Pkg << " FU=" << FromUser << std::endl;
 
    DepIterator Dep = P.InstVerIter(*this).DependsList();
    for (; Dep.end() != true;)

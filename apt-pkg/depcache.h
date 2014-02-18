@@ -53,6 +53,22 @@
 
 class OpProgress;
 
+class CacheObserver
+{
+public:
+   virtual void StateChanged(pkgCache::PkgIterator const &Pkg, 
+                             unsigned char mode,
+                             int Depth, bool FromUser) = 0;
+};
+
+class LogObserver : public CacheObserver
+{
+   virtual void StateChanged(pkgCache::PkgIterator const &Pkg, 
+                             unsigned char mode,
+                             int Depth, bool FromUser);
+};
+
+
 class pkgDepCache : protected pkgCache::Namespace
 {
    public:
@@ -128,7 +144,7 @@ class pkgDepCache : protected pkgCache::Namespace
    enum InternalFlags {AutoKept = (1 << 0), Purge = (1 << 1), ReInstall = (1 << 2), Protected = (1 << 3)};
       
    enum VersionTypes {NowVersion, InstallVersion, CandidateVersion};
-   enum ModeList {ModeDelete = 0, ModeKeep = 1, ModeInstall = 2, ModeGarbage = 3};
+   enum ModeList {ModeDelete = 0, ModeKeep = 1, ModeInstall = 2, ModeGarbage = 3, ModePurge = 4};
 
    /** \brief Represents an active action group.
     *
@@ -290,11 +306,16 @@ class pkgDepCache : protected pkgCache::Namespace
    friend class ActionGroup;
      
    protected:
+   /** \brief dpointer placeholder (for later in case we need it) */
+   void *d;
 
    // State information
    pkgCache *Cache;
    StateCache *PkgState;
    unsigned char *DepState;
+
+   // the cache observer
+   std::set<CacheObserver *> Observers;
 
    /** Stores the space changes after installation */
    signed long long iUsrSize;
@@ -486,6 +507,23 @@ class pkgDepCache : protected pkgCache::Namespace
    inline unsigned long PolicyBrokenCount() {return iPolicyBrokenCount;};
    inline unsigned long BadCount() {return iBadCount;};
 
+   // register the observer
+   void AddObserver(CacheObserver *aObserver) {
+      Observers.insert(aObserver);
+   };
+   void DelObserver(CacheObserver *aObserver) {
+      Observers.erase(aObserver);
+   };
+   void NotifyObservers(pkgCache::PkgIterator const &Pkg, 
+                        unsigned char mode,
+                        int Depth, bool FromUser)
+   {
+      for(std::set<CacheObserver *>::const_iterator I = Observers.begin();
+          I != Observers.end(); ++I)
+         (*I)->StateChanged(Pkg, mode, Depth, FromUser);
+   };
+
+   // (re)init the DepCache
    bool Init(OpProgress *Prog);
    // Generate all state information
    void Update(OpProgress *Prog = 0);
