@@ -22,8 +22,10 @@
 #include <stdio.h>
 
 #include "contents.h"
+#include "sources.h"
 
 class FileFd;
+
 
 class CacheDB
 {
@@ -74,6 +76,7 @@ class CacheDB
    bool GetCurStat();
    bool LoadControl();
    bool LoadContents(bool const &GenOnly);
+   bool LoadSource();
    bool GetMD5(bool const &GenOnly);
    bool GetSHA1(bool const &GenOnly);
    bool GetSHA256(bool const &GenOnly);
@@ -82,7 +85,8 @@ class CacheDB
    // Stat info stored in the DB, Fixed types since it is written to disk.
    enum FlagList {FlControl = (1<<0),FlMD5=(1<<1),FlContents=(1<<2),
                   FlSize=(1<<3), FlSHA1=(1<<4), FlSHA256=(1<<5), 
-                  FlSHA512=(1<<6)};
+                  FlSHA512=(1<<6), FlSource=(1<<7),
+   };
 
    struct StatStore
    {
@@ -106,6 +110,8 @@ class CacheDB
    // Data collection helpers
    debDebFile::MemControlExtract Control;
    ContentsExtract Contents;
+   DscExtract Dsc;
+
    std::string MD5Res;
    std::string SHA1Res;
    std::string SHA256Res;

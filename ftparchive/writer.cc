@@ -385,10 +385,9 @@ bool FTWScanner::SetExts(string const &Vals)
 bool PackagesWriter::DoPackage(string FileName)
 {      
    // Pull all the data we need form the DB
-   if (Db.GetFileInfo(FileName, true, DoContents, true, false, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat)
-		  == false)
+   if (Db.GetFileInfo(FileName, true, DoContents, true, false, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat) == false)
    {
-      return false;
+     return false;
    }
 
    unsigned long long FileSize = Db.GetFileSize();
@@ -614,59 +613,37 @@ SourcesWriter::SourcesWriter(string const &DB, string const &BOverrides,string c
 /* */
 bool SourcesWriter::DoPackage(string FileName)
 {
-   // Open the archive
-   FileFd F;
-   if (OpenMaybeClearSignedFile(FileName, F) == false)
-      return false;
-
-   unsigned long long const FSize = F.FileSize();
-   //FIXME: do we really need to enforce a maximum size of the dsc file?
-   if (FSize > 128*1024)
-      return _error->Error("DSC file '%s' is too large!",FileName.c_str());
-
-   if (BufSize < FSize + 2)
+  // Pull all the data out of the DB
+   // Pull all the data we need form the DB
+   if (Db.GetFileInfo(FileName, false, false, false, true, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat) == false)
    {
-      BufSize = FSize + 2;
-      Buffer = (char *)realloc(Buffer , BufSize);
+      return false;
    }
 
-   if (F.Read(Buffer, FSize) == false)
-      return false;
+   // FIXME: we need to perform a "write" here because the 
+   //        call to Db.GetFileInfo() in the loop will change
+   //        the "db cursor"
+   Db.Finish();
 
    // Stat the file for later (F might be clearsigned, so not F.FileSize())
    struct stat St;
    if (stat(FileName.c_str(), &St) != 0)
       return _error->Errno("fstat","Failed to stat %s",FileName.c_str());
 
-   // Hash the file
-   char *Start = Buffer;
-   char *BlkEnd = Buffer + FSize;
-
-   Hashes DscHashes;
-   if (FSize == (unsigned long long) St.st_size)
-   {
-      if (DoMD5 == true)
-	 DscHashes.MD5.Add((unsigned char *)Start,BlkEnd - Start);
-      if (DoSHA1 == true)
-	 DscHashes.SHA1.Add((unsigned char *)Start,BlkEnd - Start);
-      if (DoSHA256 == true)
-	 DscHashes.SHA256.Add((unsigned char *)Start,BlkEnd - Start);
-      if (DoSHA512 == true)
-	 DscHashes.SHA512.Add((unsigned char *)Start,BlkEnd - Start);
-   }
-   else
-   {
-      FileFd DscFile(FileName, FileFd::ReadOnly);
-      DscHashes.AddFD(DscFile, St.st_size, DoMD5, DoSHA1, DoSHA256, DoSHA512);
-   }
+   // read stuff
+   char *Start = Db.Dsc.Data;
+   char *BlkEnd = Db.Dsc.Data + Db.Dsc.Length;
 
    // Add extra \n to the end, just in case (as in clearsigned they are missing)
    *BlkEnd++ = '\n';
    *BlkEnd++ = '\n';
 
    pkgTagSection Tags;
-   if (Tags.Scan(Start,BlkEnd - Start) == false || Tags.Exists("Source") == false)
+   if (Tags.Scan(Start,BlkEnd - Start) == false)
       return _error->Error("Could not find a record in the DSC '%s'",FileName.c_str());
+   
+   if (Tags.Exists("Source") == false)
+      return _error->Error("Could not find a Source entry in the DSC '%s'",FileName.c_str());
    Tags.Trim();
 
    // Lookup the overide information, finding first the best priority.
@@ -732,23 +709,23 @@ bool SourcesWriter::DoPackage(string FileName)
    string const strippedName = flNotDir(FileName);
    std::ostringstream ostreamFiles;
    if (DoMD5 == true && Tags.Exists("Files"))
-      ostreamFiles << "\n " << string(DscHashes.MD5.Result()) << " " << St.st_size << " "
+      ostreamFiles << "\n " << Db.MD5Res.c_str() << " " << St.st_size << " "
 		   << strippedName << "\n " << Tags.FindS("Files");
    string const Files = ostreamFiles.str();
 
    std::ostringstream ostreamSha1;
    if (DoSHA1 == true && Tags.Exists("Checksums-Sha1"))
-      ostreamSha1 << "\n " << string(DscHashes.SHA1.Result()) << " " << St.st_size << " "
+      ostreamSha1 << "\n " << string(Db.SHA1Res.c_str()) << " " << St.st_size << " "
 		   << strippedName << "\n " << Tags.FindS("Checksums-Sha1");
 
    std::ostringstream ostreamSha256;
    if (DoSHA256 == true && Tags.Exists("Checksums-Sha256"))
-      ostreamSha256 << "\n " << string(DscHashes.SHA256.Result()) << " " << St.st_size << " "
+      ostreamSha256 << "\n " << string(Db.SHA256Res.c_str()) << " " << St.st_size << " "
 		   << strippedName << "\n " << Tags.FindS("Checksums-Sha256");
 
    std::ostringstream ostreamSha512;
    if (DoSHA512 == true && Tags.Exists("Checksums-Sha512"))
-      ostreamSha512 << "\n " << string(DscHashes.SHA512.Result()) << " " << St.st_size << " "
+      ostreamSha512 << "\n " << string(Db.SHA512Res.c_str()) << " " << St.st_size << " "
 		   << strippedName << "\n " << Tags.FindS("Checksums-Sha512");
 
    // Strip the DirStrip prefix from the FileName and add the PathPrefix

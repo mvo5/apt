@@ -239,11 +239,14 @@ bool PackageMap::GenPackages(Configuration &Setup,struct CacheDB::Stats &Stats)
    gettimeofday(&NewTime,0);
    double Delta = NewTime.tv_sec - StartTime.tv_sec + 
                   (NewTime.tv_usec - StartTime.tv_usec)/1000000.0;
-   
+
    c0out << Packages.Stats.Packages << " files " <<
 /*      SizeToStr(Packages.Stats.MD5Bytes) << "B/" << */
       SizeToStr(Packages.Stats.Bytes) << "B " <<
       TimeToStr((long)Delta) << endl;
+
+   if(_config->FindB("APT::FTPArchive::ShowCacheMisses", false) == true)
+     c0out << " Misses in Cache: " << Packages.Stats.Misses<< endl;
    
    Stats.Add(Packages.Stats);
    Stats.DeLinkBytes = Packages.Stats.DeLinkBytes;
@@ -329,6 +332,9 @@ bool PackageMap::GenSources(Configuration &Setup,struct CacheDB::Stats &Stats)
    
    c0out << Sources.Stats.Packages << " pkgs in " <<
       TimeToStr((long)Delta) << endl;
+
+   if(_config->FindB("APT::FTPArchive::ShowCacheMisses", false) == true)
+     c0out << " Misses in Cache: " << Sources.Stats.Misses << endl;
 
    Stats.Add(Sources.Stats);
    Stats.DeLinkBytes = Sources.Stats.DeLinkBytes;
@@ -442,6 +448,9 @@ bool PackageMap::GenContents(Configuration &Setup,
    double Delta = NewTime.tv_sec - StartTime.tv_sec + 
                   (NewTime.tv_usec - StartTime.tv_usec)/1000000.0;
    
+   if(_config->FindB("APT::FTPArchive::ShowCacheMisses", false) == true)
+     c0out << " Misses in Cache: " << Contents.Stats.Misses<< endl;
+
    c0out << Contents.Stats.Packages << " files " <<
       SizeToStr(Contents.Stats.Bytes) << "B " <<
       TimeToStr((long)Delta) << endl;
@@ -473,7 +482,7 @@ static void LoadTree(vector<PackageMap> &PkgList,Configuration &Setup)
    string DBCache = Setup.Find("TreeDefault::BinCacheDB",
 			       "packages-$(ARCH).db");
    string SrcDBCache = Setup.Find("TreeDefault::SrcCacheDB",
-			       "sources-$(ARCH).db");
+			       "sources-$(SECTION).db");
    string DSources = Setup.Find("TreeDefault::Sources",
 				"$(DIST)/$(SECTION)/source/Sources");
    string DFLFile = Setup.Find("TreeDefault::FileList", "");
@@ -533,11 +542,11 @@ static void LoadTree(vector<PackageMap> &PkgList,Configuration &Setup)
 	       Itm.Tag = SubstVar("$(DIST)/$(SECTION)/source",Vars);
 	       Itm.FLFile = SubstVar(Block.Find("SourceFileList",DSFLFile.c_str()),Vars);
 	       Itm.SrcExtraOverride = SubstVar(Block.Find("SrcExtraOverride"),Vars);
+	       Itm.SrcCacheDB = SubstVar(Block.Find("SrcCacheDB",SrcDBCache.c_str()),Vars);
 	    }
 	    else
 	    {
 	       Itm.BinCacheDB = SubstVar(Block.Find("BinCacheDB",DBCache.c_str()),Vars);
-	       Itm.SrcCacheDB = SubstVar(Block.Find("SrcCacheDB",DBCache.c_str()),Vars);
 	       Itm.BaseDir = SubstVar(Block.Find("Directory",DDir.c_str()),Vars);
 	       Itm.PkgFile = SubstVar(Block.Find("Packages",DPkg.c_str()),Vars);
 	       Itm.Tag = SubstVar("$(DIST)/$(SECTION)/$(ARCH)",Vars);

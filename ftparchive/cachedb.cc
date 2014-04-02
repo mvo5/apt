@@ -20,6 +20,7 @@
 #include <apt-pkg/configuration.h>
 #include <apt-pkg/fileutl.h>
 #include <apt-pkg/debfile.h>
+#include <apt-pkg/gpgv.h>
 
 #include <netinet/in.h>       // htonl, etc
 #include <ctype.h>
@@ -219,6 +220,7 @@ bool CacheDB::GetFileInfo(std::string const &FileName, bool const &DoControl,
 
     if ((DoControl && LoadControl() == false)
         || (DoContents && LoadContents(GenContentsOnly) == false)
+	|| (DoSource && LoadSource() == false)
         || (DoMD5 && GetMD5(false) == false)
         || (DoSHA1 && GetSHA1(false) == false)
         || (DoSHA256 && GetSHA256(false) == false)
@@ -234,6 +236,46 @@ bool CacheDB::GetFileInfo(std::string const &FileName, bool const &DoControl,
     return result;
 }
 									/*}}}*/
+
+bool CacheDB::LoadSource()
+{
+   // Try to read the control information out of the DB.
+   if ((CurStat.Flags & FlSource) == FlSource)
+   {
+      // Lookup the control information
+      InitQuery("cs");
+      if (Get() == true && Dsc.TakeDsc(Data.data, Data.size) == true)
+	    return true;
+      CurStat.Flags &= ~FlSource;
+   }
+   
+   if (Fd == NULL && OpenFile() == false)
+   {
+      return false;
+   }
+
+   // Read the .dsc file
+   if (Fd == NULL)
+   {
+      if(OpenFile() == false)
+         return false;
+   }
+   
+   Stats.Misses++;
+   if (Dsc.Read(FileName) == false)
+      return false;
+
+   if (Dsc.Data == 0)
+      return _error->Error(_("Failed to read .dsc"));
+   
+   // Write back the control information
+   InitQuery("cs");
+   if (Put(Dsc.Data, Dsc.Length) == true)
+      CurStat.Flags |= FlSource;
+
+   return true;
+}
+
 // CacheDB::LoadControl - Load Control information			/*{{{*/
 // ---------------------------------------------------------------------
 /* */
