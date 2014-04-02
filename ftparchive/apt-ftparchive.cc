@@ -62,6 +62,7 @@ struct PackageMap
    // Stuff for the Package File
    string PkgFile;
    string BinCacheDB;
+   string SrcCacheDB;
    string BinOverride;
    string ExtraOverride;
 
@@ -106,6 +107,12 @@ struct PackageMap
       inline bool operator() (const PackageMap &x,const PackageMap &y)
       {return x.BinCacheDB < y.BinCacheDB;};
    };  
+
+   struct SrcDBCompare : public binary_function<PackageMap,PackageMap,bool>
+   {
+      inline bool operator() (const PackageMap &x,const PackageMap &y)
+      {return x.SrcCacheDB < y.SrcCacheDB;};
+   };
    
    void GetGeneral(Configuration &Setup,Configuration &Block);
    bool GenPackages(Configuration &Setup,struct CacheDB::Stats &Stats);
@@ -263,7 +270,7 @@ bool PackageMap::GenSources(Configuration &Setup,struct CacheDB::Stats &Stats)
    SrcDone = true;
    
    // Create a package writer object.
-   SourcesWriter Sources(_config->Find("APT::FTPArchive::DB"),
+   SourcesWriter Sources(flCombine(CacheDir, SrcCacheDB),
 			 flCombine(OverrideDir,BinOverride),
 			 flCombine(OverrideDir,SrcOverride),
 			 flCombine(OverrideDir,SrcExtraOverride));
@@ -465,6 +472,8 @@ static void LoadTree(vector<PackageMap> &PkgList,Configuration &Setup)
    string DContentsH = Setup.Find("TreeDefault::Contents::Header","");
    string DBCache = Setup.Find("TreeDefault::BinCacheDB",
 			       "packages-$(ARCH).db");
+   string SrcDBCache = Setup.Find("TreeDefault::SrcCacheDB",
+			       "sources-$(ARCH).db");
    string DSources = Setup.Find("TreeDefault::Sources",
 				"$(DIST)/$(SECTION)/source/Sources");
    string DFLFile = Setup.Find("TreeDefault::FileList", "");
@@ -528,6 +537,7 @@ static void LoadTree(vector<PackageMap> &PkgList,Configuration &Setup)
 	    else
 	    {
 	       Itm.BinCacheDB = SubstVar(Block.Find("BinCacheDB",DBCache.c_str()),Vars);
+	       Itm.SrcCacheDB = SubstVar(Block.Find("SrcCacheDB",DBCache.c_str()),Vars);
 	       Itm.BaseDir = SubstVar(Block.Find("Directory",DDir.c_str()),Vars);
 	       Itm.PkgFile = SubstVar(Block.Find("Packages",DPkg.c_str()),Vars);
 	       Itm.Tag = SubstVar("$(DIST)/$(SECTION)/$(ARCH)",Vars);
@@ -573,6 +583,7 @@ static void LoadBinDir(vector<PackageMap> &PkgList,Configuration &Setup)
       Itm.PkgFile = Block.Find("Packages");
       Itm.SrcFile = Block.Find("Sources");
       Itm.BinCacheDB = Block.Find("BinCacheDB");
+      Itm.SrcCacheDB = Block.Find("SrcCacheDB");
       Itm.BinOverride = Block.Find("BinOverride");
       Itm.ExtraOverride = Block.Find("ExtraOverride");
       Itm.SrcExtraOverride = Block.Find("SrcExtraOverride");
@@ -947,8 +958,11 @@ static bool Clean(CommandLine &CmdL)
 	 _error->DumpErrors();
       
       string CacheDB = I->BinCacheDB;
-      for (; I != PkgList.end() && I->BinCacheDB == CacheDB; ++I);
+      for (; I != PkgList.end() && I->BinCacheDB == CacheDB; ++I)
+         ;
    }
+
+   // FIXME: clean for the SourcesDB
    
    return true;
 }

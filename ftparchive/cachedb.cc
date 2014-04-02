@@ -99,13 +99,32 @@ bool CacheDB::OpenFile()
 	Fd = new FileFd(FileName,FileFd::ReadOnly);
 	if (_error->PendingError() == true)
 	{
-		delete Fd;
-		Fd = NULL;
-		return false;
+           CloseFile();
+           return false;
 	}
 	return true;
 }
 									/*}}}*/
+void CacheDB::CloseFile()
+{
+   delete Fd;
+   Fd = NULL;
+}
+
+bool CacheDB::OpenDebFile()
+{
+   DebFile = new debDebFile(*Fd);
+   if (_error->PendingError() == true)
+      return false;
+   return true;
+}
+
+void CacheDB::CloseDebFile()
+{
+   delete DebFile;
+   DebFile = NULL;
+}
+
 // CacheDB::GetFileStat - Get stats from the file 			/*{{{*/
 // ---------------------------------------------------------------------
 /* This gets the size from the database if it's there.  If we need
@@ -168,54 +187,51 @@ bool CacheDB::GetCurStat()
 									/*}}}*/
 // CacheDB::GetFileInfo - Get all the info about the file		/*{{{*/
 // ---------------------------------------------------------------------
-bool CacheDB::GetFileInfo(std::string const &FileName, bool const &DoControl, bool const &DoContents,
-				bool const &GenContentsOnly, bool const &DoMD5, bool const &DoSHA1,
-				bool const &DoSHA256, 	bool const &DoSHA512, 
+bool CacheDB::GetFileInfo(std::string const &FileName, bool const &DoControl, 
+                          bool const &DoContents,
+                          bool const &GenContentsOnly, 
+                          bool const &DoSource,
+                          bool const &DoMD5, bool const &DoSHA1,
+                          bool const &DoSHA256, bool const &DoSHA512, 
                           bool const &checkMtime)
 {
-	this->FileName = FileName;
+   bool result = true;
+   this->FileName = FileName;
 
-	if (GetCurStat() == false)
+   if (GetCurStat() == false)
    {
-		return false;
+      return false;
    }   
    OldStat = CurStat;
 
-	if (GetFileStat(checkMtime) == false)
-	{
-		delete Fd;
-		Fd = NULL;
-		return false;	
-	}
+   if (GetFileStat(checkMtime) == false)
+   {
+      CloseFile();
+      return false;	
+   }
 
     /* if mtime changed, update CurStat from disk */
     if (checkMtime == true && OldStat.mtime != CurStat.mtime)
-        CurStat.Flags = FlSize;
+       CurStat.Flags = FlSize;
 
-	Stats.Bytes += CurStat.FileSize;
-	Stats.Packages++;
+    Stats.Bytes += CurStat.FileSize;
+    Stats.Packages++;
 
-	if ((DoControl && LoadControl() == false)
-		|| (DoContents && LoadContents(GenContentsOnly) == false)
-		|| (DoMD5 && GetMD5(false) == false)
-		|| (DoSHA1 && GetSHA1(false) == false)
-		|| (DoSHA256 && GetSHA256(false) == false)
-		|| (DoSHA512 && GetSHA512(false) == false)
-           )
-	{
-		delete Fd;
-		Fd = NULL;
-		delete DebFile;
-		DebFile = NULL;
-		return false;	
-	}
-
-	delete Fd;
-	Fd = NULL;
-	delete DebFile;
-	DebFile = NULL;
-
-   return true;
+    if ((DoControl && LoadControl() == false)
+        || (DoContents && LoadContents(GenContentsOnly) == false)
+        || (DoMD5 && GetMD5(false) == false)
+        || (DoSHA1 && GetSHA1(false) == false)
+        || (DoSHA256 && GetSHA256(false) == false)
+        || (DoSHA512 && GetSHA512(false) == false)
+       )
+    {
+       result = false;
+    }
+    
+    CloseFile();
+    CloseDebFile();
+    
+    return result;
 }
 									/*}}}*/
 // CacheDB::LoadControl - Load Control information			/*{{{*/
@@ -238,11 +254,10 @@ bool CacheDB::LoadControl()
       return false;
    }
    // Create a deb instance to read the archive
-   if (DebFile == 0)
+   if (DebFile == NULL)
    {
-      DebFile = new debDebFile(*Fd);
-      if (_error->PendingError() == true)
-	 return false;
+      if(OpenDebFile() == false)
+         return false;
    }
    
    Stats.Misses++;
@@ -288,8 +303,7 @@ bool CacheDB::LoadContents(bool const &GenOnly)
    // Create a deb instance to read the archive
    if (DebFile == 0)
    {
-      DebFile = new debDebFile(*Fd);
-      if (_error->PendingError() == true)
+      if(OpenDebFile() == false)
 	 return false;
    }
 

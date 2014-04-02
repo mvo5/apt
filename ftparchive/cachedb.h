@@ -65,6 +65,11 @@ class CacheDB
       return true;
    }
    bool OpenFile();
+   void CloseFile();
+
+   bool OpenDebFile();
+   void CloseDebFile();
+
    bool GetFileStat(bool const &doStat = false);
    bool GetCurStat();
    bool LoadControl();
@@ -139,8 +144,11 @@ class CacheDB
    inline unsigned long long GetFileSize(void) {return CurStat.FileSize;}
    
    bool SetFile(std::string const &FileName,struct stat St,FileFd *Fd);
-   bool GetFileInfo(std::string const &FileName, bool const &DoControl, bool const &DoContents, bool const &GenContentsOnly,
+
+   // terrible old overloaded interface
+   bool GetFileInfo(std::string const &FileName, bool const &DoControl, bool const &DoContents, bool const &GenContentsOnly, bool const &DoSource,
 		    bool const &DoMD5, bool const &DoSHA1, bool const &DoSHA256, bool const &DoSHA512, bool const &checkMtime = false);
+
    bool Finish();   
    
    bool Clean();

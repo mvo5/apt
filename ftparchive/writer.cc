@@ -385,7 +385,7 @@ bool FTWScanner::SetExts(string const &Vals)
 bool PackagesWriter::DoPackage(string FileName)
 {      
    // Pull all the data we need form the DB
-   if (Db.GetFileInfo(FileName, true, DoContents, true, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat)
+   if (Db.GetFileInfo(FileName, true, DoContents, true, false, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat)
 		  == false)
    {
       return false;
@@ -785,7 +785,7 @@ bool SourcesWriter::DoPackage(string FileName)
           (DoSHA256 == true && !Tags.Exists("Checksums-Sha256")) ||
           (DoSHA512 == true && !Tags.Exists("Checksums-Sha512")))
       {
-         if (Db.GetFileInfo(OriginalPath, false, false, false, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat)
+         if (Db.GetFileInfo(OriginalPath, false, false, false, false, DoMD5, DoSHA1, DoSHA256, DoSHA512, DoAlwaysStat)
                == false)
          {
             return _error->Error("Error getting file info");
@@ -893,7 +893,7 @@ ContentsWriter::ContentsWriter(string const &DB, string const &Arch) :
    determine what the package name is. */
 bool ContentsWriter::DoPackage(string FileName, string Package)
 {
-   if (!Db.GetFileInfo(FileName, Package.empty(), true, false, false, false, false, false))
+   if (!Db.GetFileInfo(FileName, Package.empty(), true, false, false, false, false, false, false))
    {
       return false;
    }
