@@ -134,12 +134,15 @@ EOF
 
 
 # generate (no cachedb)
-aptftparchive generate apt-ftparchive.conf -o APT::FTPArchive::ShowCacheMisses=1
+aptftparchive generate apt-ftparchive.conf -o APT::FTPArchive::ShowCacheMisses=1 2> stats-out.txt
+testequal " Misses in Cache: 2" grep Misses stats-out.txt
 assert_correct_sources_file
+
 
 # generate again out of the cache
 rm -f ./aptarchive/dists/test/main/source/Sources
-aptftparchive generate apt-ftparchive.conf -o APT::FTPArchive::ShowCacheMisses=1
+aptftparchive generate apt-ftparchive.conf -o APT::FTPArchive::ShowCacheMisses=1  2> stats-out.txt
+testequal " Misses in Cache: 0" grep Misses stats-out.txt
 assert_correct_sources_file
 
 
