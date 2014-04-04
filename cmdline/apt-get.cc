@@ -1515,11 +1515,34 @@ static bool DoChangelog(CommandLine &CmdL)
    if (Cache.ReadOnlyOpen() == false)
       return false;
    
-   APT::CacheSetHelper helper(c0out);
+   // FIXME: instead of notice, write a custom helper that displays a
+   //        message that a source pkg was picked instead of a binary
+   APT::CacheSetHelper helper(c0out, GlobalError::NOTICE);
    APT::VersionList verset = APT::VersionList::FromCommandLine(Cache,
 		CmdL.FileList + 1, APT::VersionList::CANDIDATE, helper);
-   if (verset.empty() == true)
-      return false;
+   
+   // FIXME: move support for source names into the Versionlist code
+   if (verset.empty() == true) 
+   {
+      pkgSourceList *List = Cache.GetSourceList();
+      pkgRecords Recs(Cache);
+      pkgSrcRecords SrcRecs(*List);
+      if (_error->PendingError() == true)
+         return false;
+
+      for (const char **I = CmdL.FileList + 1; *I != 0; I++) 
+      {
+         // if we there is no binary, let them have a source pkg
+         string Src, BinName, SrcVer;
+         pkgSrcRecords::Parser *Last = FindSrc(*I,Recs,SrcRecs,Src,Cache);
+         if (Last == 0)
+            return false;
+         SrcVer = Last->Version();
+         BinName = Last->Binaries()[0];
+         // BUG: SrcVer maybe != BinVer
+         verset.insert(APT::VersionSet::FromString(Cache, BinName+"="+SrcVer));
+      }
+   }
    pkgAcquire Fetcher;
 
    if (_config->FindB("APT::Get::Print-URIs", false) == true)
