@@ -1,6 +1,7 @@
-apt (1.0ubuntu1) trusty; urgency=low
+apt (1.0ubuntu1~ppa1) trusty; urgency=low
 
   * merge with debian/sid
+  * add support for source package cachedb
 
  -- Michael Vogt <michael.vogt@ubuntu.com>  Tue, 01 Apr 2014 17:48:58 +0200
 
