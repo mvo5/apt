@@ -172,7 +172,7 @@ class SourcesWriter : public FTWScanner
    string PathPrefix;
    string DirStrip;
    FILE *Output;
-   struct CacheDB::Stats Stats;
+   struct CacheDB::Stats &Stats;
 
    virtual bool DoPackage(string FileName);
 
