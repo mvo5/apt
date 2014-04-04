@@ -345,6 +345,7 @@ bool CacheDB::LoadContents(bool const &GenOnly)
 	 return false;
    }
 
+   Stats.Misses++;
    if (Contents.Read(*DebFile) == false)
       return false;	    
    
