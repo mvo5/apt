@@ -690,6 +690,10 @@ static bool SimpleGenPackages(CommandLine &CmdL)
    if (Packages.RecursiveScan(CmdL.FileList[1]) == false)
       return false;
 
+   // Give some stats if asked for
+   if(_config->FindB("APT::FTPArchive::ShowCacheMisses", false) == true)
+     c0out << " Misses in Cache: " << Packages.Stats.Misses<< endl;
+
    return true;
 }
 									/*}}}*/
@@ -745,6 +749,10 @@ static bool SimpleGenSources(CommandLine &CmdL)
    // Do recursive directory searching
    if (Sources.RecursiveScan(CmdL.FileList[1]) == false)
       return false;
+
+   // Give some stats if asked for
+   if(_config->FindB("APT::FTPArchive::ShowCacheMisses", false) == true)
+     c0out << " Misses in Cache: " << Sources.Stats.Misses<< endl;
 
    return true;
 }
@@ -957,23 +965,33 @@ static bool Clean(CommandLine &CmdL)
 
    // Sort by cache DB to improve IO locality.
    stable_sort(PkgList.begin(),PkgList.end(),PackageMap::DBCompare());
+   stable_sort(PkgList.begin(),PkgList.end(),PackageMap::SrcDBCompare());
 
    string CacheDir = Setup.FindDir("Dir::CacheDir");
    
    for (vector<PackageMap>::iterator I = PkgList.begin(); I != PkgList.end(); )
    {
-      c0out << I->BinCacheDB << endl;
+      if(I->BinCacheDB != "")
+         c0out << I->BinCacheDB << endl;
+      if(I->SrcCacheDB != "")
+         c0out << I->SrcCacheDB << endl;
       CacheDB DB(flCombine(CacheDir,I->BinCacheDB));
+      CacheDB DB_SRC(flCombine(CacheDir,I->SrcCacheDB));
       if (DB.Clean() == false)
+	 _error->DumpErrors();
+      if (DB_SRC.Clean() == false)
 	 _error->DumpErrors();
       
       string CacheDB = I->BinCacheDB;
-      for (; I != PkgList.end() && I->BinCacheDB == CacheDB; ++I)
-         ;
+      string SrcCacheDB = I->SrcCacheDB;
+      while(I != PkgList.end() && 
+            I->BinCacheDB == CacheDB && 
+            I->SrcCacheDB == SrcCacheDB)
+         ++I;
+
    }
 
-   // FIXME: clean for the SourcesDB
-   
+  
    return true;
 }
 									/*}}}*/
