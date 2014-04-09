@@ -38,13 +38,13 @@ bool pkgDistUpgrade(pkgDepCache &Cache)
       in versioned or-groups to upgrade the old solver instead of installing
       a new one (if the old solver is not the first one [anymore]) */
    for (pkgCache::PkgIterator I = Cache.PkgBegin(); I.end() == false; ++I)
-      if (I->CurrentVer != 0)
+      if (I->CurrentVer != 0 && Cache[I].Upgradable())
 	 Cache.MarkInstall(I, false, 0, false);
 
    /* Auto upgrade all installed packages, this provides the basis 
       for the installation */
    for (pkgCache::PkgIterator I = Cache.PkgBegin(); I.end() == false; ++I)
-      if (I->CurrentVer != 0)
+      if (I->CurrentVer != 0 && Cache[I].Upgradable())
 	 Cache.MarkInstall(I, true, 0, false);
 
    /* Now, install each essential package which is not installed
@@ -81,7 +81,7 @@ bool pkgDistUpgrade(pkgDepCache &Cache)
    /* We do it again over all previously installed packages to force 
       conflict resolution on them all. */
    for (pkgCache::PkgIterator I = Cache.PkgBegin(); I.end() == false; ++I)
-      if (I->CurrentVer != 0)
+      if (I->CurrentVer != 0 && Cache[I].Upgradable())
 	 Cache.MarkInstall(I, false, 0, false);
 
    pkgProblemResolver Fix(&Cache);

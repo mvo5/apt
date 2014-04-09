@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture "i386"
+
+# Regression test for LP: #1304403
+# 
+# The issue here is that libkadm5srv-mit8 (priority standard) is replaced
+# by a new  libkadm5srv-mit9 and libkbd5-7 breaks on the old -mit8 package.
+# The -mit8 package is no longer downloadable (and hence not upradable)
+#
+# Because the way pkgDistUpgrade used to work is that it calls "MarkInstall()"
+# on very Pkg that has a a "CurrentVer != 0". The trouble is that if a pkg
+# has no InstallVer then MarkInstall() will call MarkKeep(). This causes the
+# (correctly) removed not-downloadable package to come back into "keep" state.
+# 
+
+# normal upradable pkg
+#  (libkdb5-7 that breaks on libkadm5srv-mit8 (<< 1.11+dfsg~)
+insertpackage 'stable' 'upgradable' 'all' '1.0'
+insertpackage 'unstable' 'upgradable' 'all' '2.0' 'Breaks: not-downloadable (<< 1.1)'
+insertinstalledpackage 'upgradable' 'all' '1.0'
+
+# no longer downloadable pkg (libkadm5srv-mit8, replaced by libkadm5srv-mit9)
+# but priority standard pushes it higher
+insertinstalledpackage 'not-downloadable' 'all' '1.0' '' 'standard'
+
+
+setupaptarchive
+
+testequal 'Reading package lists...
+Building dependency tree...
+The following packages will be REMOVED:
+  not-downloadable
+The following packages will be upgraded:
+  upgradable
+1 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.
+Remv not-downloadable [1.0]
+Inst upgradable [1.0] (2.0 unstable [all])
+Conf upgradable (2.0 unstable [all])' aptget -s dist-upgrade
