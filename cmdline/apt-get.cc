@@ -1688,6 +1688,7 @@ int main(int argc,const char *argv[])					/*{{{*/
                                    {"remove",&DoInstall},
                                    {"purge",&DoInstall},
 				   {"autoremove",&DoInstall},
+				   {"autopurge",&DoInstall},
 				   {"markauto",&DoMarkAuto},
 				   {"unmarkauto",&DoMarkAuto},
                                    {"dist-upgrade",&DoDistUpgrade},
