@@ -21,6 +21,17 @@ case "$1" in
 		rm -f $SECRING
 	fi
 	apt-key update
+
+        # ensure tighter permissons on the logs, see LP: #975199
+        if dpkg --compare-versions "$2" lt-nl 0.8.16~exp12ubuntu10.7; then
+            # ensure permissions are right
+            chmod -f 0640 /var/log/apt/term.log* || true
+        fi
+
+        if dpkg --compare-versions "$2" lt-nl 0.8.16~exp12ubuntu10.9; then
+            /etc/kernel/postinst.d/apt-auto-removal
+        fi
+
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

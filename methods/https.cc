@@ -124,7 +124,6 @@ bool HttpsMethod::Fetch(FetchItem *Itm)
    curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress_callback);
    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, this);
    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, false);
-   curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
    curl_easy_setopt(curl, CURLOPT_FILETIME, true);
 
    // SSL parameters are set by default to the common (non mirror-specific) value
@@ -240,6 +239,7 @@ bool HttpsMethod::Fetch(FetchItem *Itm)
       curl_easy_setopt(curl, CURLOPT_VERBOSE, true);
 
    // error handling
+   curl_errorstr[0] = '\0';
    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_errorstr);
 
    // If we ask for uncompressed files servers might respond with content-
@@ -285,10 +285,15 @@ bool HttpsMethod::Fetch(FetchItem *Itm)
    long curl_servdate;
    curl_easy_getinfo(curl, CURLINFO_FILETIME, &curl_servdate);
 
+   // If the server returns 200 OK but the If-Modified-Since condition is not
+   // met, CURLINFO_CONDITION_UNMET will be set to 1
+   long curl_condition_unmet = 0;
+   curl_easy_getinfo(curl, CURLINFO_CONDITION_UNMET, &curl_condition_unmet);
+
    File->Close();
 
    // cleanup
-   if(success != 0) 
+   if(success != 0 || (curl_responsecode != 200 && curl_responsecode != 304))
    {
       _error->Error("%s", curl_errorstr);
       // unlink, no need keep 401/404 page content in partial/
@@ -312,7 +317,7 @@ bool HttpsMethod::Fetch(FetchItem *Itm)
       Res.Filename = File->Name();
       Res.LastModified = Buf.st_mtime;
       Res.IMSHit = false;
-      if (curl_responsecode == 304)
+      if (curl_responsecode == 304 || curl_condition_unmet)
       {
 	 unlink(File->Name().c_str());
 	 Res.IMSHit = true;

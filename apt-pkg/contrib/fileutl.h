@@ -171,6 +171,7 @@ std::vector<std::string> GetListOfFilesInDir(std::string const &Dir, std::string
 					bool const &SortList, bool const &AllowNoExt=false);
 std::vector<std::string> GetListOfFilesInDir(std::string const &Dir, std::vector<std::string> const &Ext,
 					bool const &SortList);
+std::vector<std::string> GetListOfFilesInDir(std::string const &Dir, bool SortList);
 std::string SafeGetCWD();
 void SetCloseExec(int Fd,bool Close);
 void SetNonBlock(int Fd,bool Block);
@@ -178,11 +179,16 @@ bool WaitFd(int Fd,bool write = false,unsigned long timeout = 0);
 pid_t ExecFork();
 bool ExecWait(pid_t Pid,const char *Name,bool Reap = false);
 
+// check if the given file starts with a PGP cleartext signature
+bool StartsWithGPGClearTextSignature(std::string const &FileName);
+
 // File string manipulators
 std::string flNotDir(std::string File);
 std::string flNotFile(std::string File);
 std::string flNoLink(std::string File);
 std::string flExtension(std::string File);
 std::string flCombine(std::string Dir,std::string File);
+
+
 
 #endif

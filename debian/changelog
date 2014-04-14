@@ -1,3 +1,163 @@
+apt (0.8.16~exp12ubuntu10.16) precise; urgency=low
+
+  * Keep linux-tools packages matching installed kernels (LP: #1205284)
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Fri, 15 Nov 2013 15:16:45 +0000
+
+apt (0.8.16~exp12ubuntu10.15) precise; urgency=low
+
+  [ David Kalnischkies ]
+  * ftparchive/writer.cc:
+    - handle the APT::FTPArchive::Packages::SHA512 option correctly instead
+      of overriding SHA256, thanks Christian Marillat! (Closes: #680252,
+      LP: #1234691)
+
+  [ Colin Watson ]
+  * Fix apt-ftparchive's generation of SHA512 checksums for Sources,
+    previously incorrectly generated as SHA256 (LP: #1234705).
+
+ -- Colin Watson <cjwatson@ubuntu.com>  Thu, 03 Oct 2013 14:19:02 +0100
+
+apt (0.8.16~exp12ubuntu10.14) precise; urgency=low
+
+  * Fix unhandled If-Modified-Since case that causes apt lists corruption.
+    LP: #1179781
+
+ -- Dave Chiluk <chiluk@canonical.com>  Tue, 20 Aug 2013 09:56:40 -0500
+
+apt (0.8.16~exp12ubuntu10.12) precise; urgency=low
+
+  * Add patch from Thomas Bushnell to make apt-get reuse https connections 
+    (LP: #1087543)
+
+ -- Dave Chiluk <chiluk@canonical.com>  Fri, 12 Jul 2013 12:16:26 -0500
+
+apt (0.8.16~exp12ubuntu10.11) precise-proposed; urgency=low
+
+  [ Michael Vogt ]
+  * test/integration/test-bug-1078697-missing-source-hashes:
+    - add test for deb-src hash generation
+
+  [ Marc Deslauriers ]
+  * make apt-ftparchive generate missing deb-src hashes (LP: #1078697)
+
+ -- Michael Vogt <michael.vogt@ubuntu.com>  Thu, 04 Apr 2013 18:42:34 +0200
+
+apt (0.8.16~exp12ubuntu10.10) precise-security; urgency=low
+
+  * SECURITY UPDATE: InRelease verification bypass
+    - CVE-2013-1051
+
+  [ David Kalnischk ]
+  [ Michael Vogt ]
+  * apt-pkg/deb/debmetaindex.cc,
+    test/integration/test-bug-595691-empty-and-broken-archive-files,
+    test/integration/test-releasefile-verification:
+    - disable InRelease downloading until the verification issue is
+      fixed, thanks to Ansgar Burchardt for finding the flaw
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Wed, 13 Mar 2013 11:27:59 -0400
+
+apt (0.8.16~exp12ubuntu10.9) precise-proposed; urgency=low
+
+  [ David Kalnischkies ]
+  * apt-pkg/depcache.cc:
+    - prefer to install packages which have an already installed M-A:same
+      sibling while choosing providers (LP: #1130419)
+
+  [ Steve Langasek ]
+  * Invoke /etc/kernel/postinst.d/apt-auto-removal directly on upgrade for
+    bug #923876, so that an 'apt-get autoremove' run before any new kernel
+    packages have been installed gives the expected behavior.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Sat, 02 Mar 2013 20:22:43 +0000
+
+apt (0.8.16~exp12ubuntu10.8) precise; urgency=low
+
+  * Backport kernel auto-removal/retention policy from raring (LP: #923876)
+    - debian/apt.auto-removal.sh, debian/rules, debian/apt.dirs: Add new
+      script to /etc/kernel/postinst.d/ that ensures we always retain the
+      currently-running, being-installed, and newest-installed kernels.
+    - debian/apt.conf.autoremove: don't include linux-restricted-modules*,
+      linux-image*, and linux-ubuntu-modules* in the never-removed list.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Tue, 12 Feb 2013 02:23:24 -0700
+
+apt (0.8.16~exp12ubuntu10.7) precise-security; urgency=low
+
+  * SECURITY UPDATE: change permissions of 
+    /var/log/apt/term.log to 0640 (LP: #975199)
+    - CVE-2012-0961
+
+ -- Michael Vogt <michael.vogt@ubuntu.com>  Tue, 04 Dec 2012 15:38:12 +0100
+
+apt (0.8.16~exp12ubuntu10.6) precise-proposed; urgency=low
+
+  [ David Kalnischkies ]
+  * apt-pkg/packagemanager.cc:
+    - do not do lock-step configuration for a M-A:same package if it isn't
+      unpacked yet in SmartConfigure and do not unpack a M-A:same package
+      again in SmartUnPack if we have already configured it (LP: #1062503)
+  
+  [ Michael Vogt ]
+  * update Vcs to link to the precise branch
+
+ -- Michael Vogt <michael.vogt@ubuntu.com>  Fri, 09 Nov 2012 10:06:31 +0100
+
+apt (0.8.16~exp12ubuntu10.5) precise-proposed; urgency=low
+
+  * apt-pkg/pkgcachegen.cc:
+    - Fix crash if the cache is remapped while writing a Provides version
+      (LP: #1066445).
+
+ -- Colin Watson <cjwatson@ubuntu.com>  Mon, 15 Oct 2012 05:42:45 +0100
+
+apt (0.8.16~exp12ubuntu10.4) precise-proposed; urgency=low
+
+  [ David Kalnischkies ]
+  * apt-pkg/packagemanager.cc:
+    - do not run into loop on new-pre-depends-breaks (Closes: #673536)
+      LP: #1050791
+  * apt-pkg/cachefile.cc:
+    - clean up lost atomic cachefiles with 'clean' (Closes: #650513)
+      LP: #1050779
+  
+  [ TJ ]
+  * apt-pkg/contrib/netrc.cc:
+    - increase LOGINSIZE/PASSWORDSIZE limits and add proper error
+      if the limits are reached (LP: #1065429)
+  
+  [ Michael Vogt ]
+  * lp:~mvo/apt/lp346386-precise:
+    - fail gracefully when a InRelease file is not valid, e.g. behind
+      paywalls (LP: #346386)
+
+ -- Michael Vogt <michael.vogt@ubuntu.com>  Thu, 11 Oct 2012 11:32:27 +0200
+
+apt (0.8.16~exp12ubuntu10.3) precise-proposed; urgency=low
+
+  * ftparchive/override.cc:
+    - Double maximum override line length to 1000 (LP: #1038961).
+
+ -- Colin Watson <cjwatson@ubuntu.com>  Mon, 20 Aug 2012 13:47:32 +0100
+
+apt (0.8.16~exp12ubuntu10.2) precise-security; urgency=low
+
+  * SECURITY UPDATE: Disable apt-key net-update for now, as validation
+    code is still insecure
+    - cmdline/apt-key: exit 1 immediately in net_update()
+    - CVE-2012-0954
+    - LP: #1013639
+
+ -- Jamie Strandboge <jamie@ubuntu.com>  Fri, 15 Jun 2012 08:02:02 -0500
+
+apt (0.8.16~exp12ubuntu10.1) precise-security; urgency=low
+
+  * adjust apt-key to ensure no collisions on subkeys too. Patch thanks to
+    Marc Deslauriers. (LP: #1013128)
+
+ -- Jamie Strandboge <jamie@ubuntu.com>  Thu, 14 Jun 2012 11:30:50 -0500
+
 apt (0.8.16~exp12ubuntu10) precise-proposed; urgency=low
 
   [ Malcolm Scott ]

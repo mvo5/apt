@@ -492,6 +492,7 @@ bool pkgPackageManager::SmartConfigure(PkgIterator Pkg, int const Depth)
 	   P.end() == false; P = Pkg.Group().NextPkg(P))
       {
 	 if (Pkg == P || List->IsFlag(P,pkgOrderList::Configured) == true ||
+	     List->IsFlag(P,pkgOrderList::UnPacked) == false ||
 	     Cache[P].InstallVer == 0 || (P.CurrentVer() == Cache[P].InstallVer &&
 	      (Cache[Pkg].iFlags & pkgDepCache::ReInstall) != pkgDepCache::ReInstall))
 	    continue;
@@ -783,7 +784,7 @@ bool pkgPackageManager::SmartUnPack(PkgIterator Pkg, bool const Immediate, int c
 			   VerIterator V(Cache,*I);
 			   PkgIterator P = V.ParentPkg();
 			   // we are checking for installation as an easy 'protection' against or-groups and (unchosen) providers
-			   if (P->CurrentVer == 0 || P != Pkg || (P.CurrentVer() != V && Cache[P].InstallVer != V))
+			   if (P != Pkg || (P.CurrentVer() != V && Cache[P].InstallVer != V))
 			      continue;
 			   circle = true;
 			   break;
@@ -872,6 +873,7 @@ bool pkgPackageManager::SmartUnPack(PkgIterator Pkg, bool const Immediate, int c
 	   P.end() == false; P = Pkg.Group().NextPkg(P))
       {
 	 if (P->CurrentVer != 0 || P == Pkg || List->IsFlag(P,pkgOrderList::UnPacked) == true ||
+	     List->IsFlag(P,pkgOrderList::Configured) == true ||
 	     Cache[P].InstallVer == 0 || (P.CurrentVer() == Cache[P].InstallVer &&
 	      (Cache[Pkg].iFlags & pkgDepCache::ReInstall) != pkgDepCache::ReInstall))
 	    continue;
