@@ -37,7 +37,6 @@
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <sys/select.h>
 #include <cstring>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -45,6 +44,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <iostream>
+#include <poll.h>
 
 #include "config.h"
 #include "connect.h"
@@ -570,7 +570,7 @@ bool HttpServerState::Flush(FileFd * const File)
 									/*}}}*/
 // HttpServerState::Go - Run a single loop				/*{{{*/
 // ---------------------------------------------------------------------
-/* This runs the select loop over the server FDs, Output file FDs and
+/* This runs the poll loop over the server FDs, Output file FDs and
    stdin. */
 bool HttpServerState::Go(bool ToFile, FileFd * const File)
 {
@@ -579,41 +579,44 @@ bool HttpServerState::Go(bool ToFile, FileFd * const File)
 			       ToFile == false))
       return false;
    
-   fd_set rfds,wfds;
-   FD_ZERO(&rfds);
-   FD_ZERO(&wfds);
+   struct pollfd fds[8];
+   int i=0;
    
    /* Add the server. We only send more requests if the connection will 
       be persisting */
    if (Out.WriteSpace() == true && ServerFd != -1 
        && Persistent == true)
-      FD_SET(ServerFd,&wfds);
+   {
+      fds[i].fd = ServerFd;
+      fds[i].events = POLLOUT|POLLPRI;
+      i++;
+   }
    if (In.ReadSpace() == true && ServerFd != -1)
-      FD_SET(ServerFd,&rfds);
+   {
+      fds[i].fd = ServerFd;
+      fds[i].events = POLLIN|POLLPRI;
+      i++;
+   }
    
-   // Add the file
-   int FileFD = -1;
-   if (File != NULL)
-      FileFD = File->Fd();
-   
-   if (In.WriteSpace() == true && ToFile == true && FileFD != -1)
-      FD_SET(FileFD,&wfds);
-
    // Add stdin
    if (_config->FindB("Acquire::http::DependOnSTDIN", true) == true)
-      FD_SET(STDIN_FILENO,&rfds);
-	  
-   // Figure out the max fd
-   int MaxFd = FileFD;
-   if (MaxFd < ServerFd)
-      MaxFd = ServerFd;
+   {
+      fds[i].fd = STDIN_FILENO;
+      fds[i].events = POLLIN|POLLPRI;
+      i++;
+   }
 
-   // Select
-   struct timeval tv;
-   tv.tv_sec = TimeOut;
-   tv.tv_usec = 0;
+   if (In.WriteSpace() == true && ToFile == true && File->Fd() != -1)
+   {
+      fds[i].fd = File->Fd();
+      fds[i].events = POLLOUT|POLLPRI;
+      i++;
+   }
+	  
+   // poll
+   int timeout_milliseconds = TimeOut > 0 ? TimeOut/1000 : 0;
    int Res = 0;
-   if ((Res = select(MaxFd+1,&rfds,&wfds,0,&tv)) < 0)
+   if ((Res = poll(fds,i,timeout_milliseconds)) < 0)
    {
       if (errno == EINTR)
 	 return true;
@@ -627,34 +630,34 @@ bool HttpServerState::Go(bool ToFile, FileFd * const File)
    }
    
    // Handle server IO
-   if (ServerFd != -1 && FD_ISSET(ServerFd,&rfds))
+   if (ServerFd != -1 && (fds[0].revents&POLLIN) == POLLIN)
    {
       errno = 0;
       if (In.Read(ServerFd) == false)
 	 return Die(*File);
    }
 	 
-   if (ServerFd != -1 && FD_ISSET(ServerFd,&wfds))
+   if (ServerFd != -1 && (fds[0].revents&POLLOUT) == POLLOUT)
    {
       errno = 0;
       if (Out.Write(ServerFd) == false)
 	 return Die(*File);
    }
 
-   // Send data to the file
-   if (FileFD != -1 && FD_ISSET(FileFD,&wfds))
-   {
-      if (In.Write(FileFD) == false)
-	 return _error->Errno("write",_("Error writing to output file"));
-   }
-
    // Handle commands from APT
-   if (FD_ISSET(STDIN_FILENO,&rfds))
+   if ((fds[2].revents&POLLIN) == POLLIN)
    {
       if (Owner->Run(true) != -1)
 	 exit(100);
    }   
        
+   // Send data to the file
+   if (File->Fd() != -1 && (fds[3].revents&POLLOUT) == POLLOUT)
+   {
+      if (In.Write(File->Fd()) == false)
+	 return _error->Errno("write",_("Error writing to output file"));
+   }
+
    return true;
 }
 									/*}}}*/

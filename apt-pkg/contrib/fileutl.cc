@@ -30,7 +30,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <sys/select.h>
+#include <poll.h>
 #include <time.h>
 #include <string>
 #include <vector>
@@ -686,41 +686,27 @@ void SetNonBlock(int Fd,bool Block)
 									/*}}}*/
 // WaitFd - Wait for a FD to become readable				/*{{{*/
 // ---------------------------------------------------------------------
-/* This waits for a FD to become readable using select. It is useful for
+/* This waits for a FD to become readable using poll. It is useful for
    applications making use of non-blocking sockets. The timeout is 
    in seconds. */
 bool WaitFd(int Fd,bool write,unsigned long timeout)
 {
-   fd_set Set;
-   struct timeval tv;
-   FD_ZERO(&Set);
-   FD_SET(Fd,&Set);
-   tv.tv_sec = timeout;
-   tv.tv_usec = 0;
-   if (write == true) 
-   {      
-      int Res;
-      do
-      {
-	 Res = select(Fd+1,0,&Set,0,(timeout != 0?&tv:0));
-      }
-      while (Res < 0 && errno == EINTR);
-      
-      if (Res <= 0)
-	 return false;
-   } 
-   else 
+   struct pollfd fds[1];
+   fds[0].fd = Fd;
+   if(write == true)
+      fds[0].events = POLLOUT|POLLPRI;
+   else
+      fds[0].events = POLLIN|POLLPRI;
+
+   int Res;
+   do
    {
-      int Res;
-      do
-      {
-	 Res = select(Fd+1,&Set,0,0,(timeout != 0?&tv:0));
-      }
-      while (Res < 0 && errno == EINTR);
-      
-      if (Res <= 0)
-	 return false;
+      Res = poll(fds, 1, timeout != 0 ? timeout/1000 : 0);
    }
+   while (Res < 0 && errno == EINTR);
+      
+   if (Res <= 0)
+      return false;
    
    return true;
 }

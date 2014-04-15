@@ -34,7 +34,6 @@
 
 #include <dirent.h>
 #include <sys/time.h>
-#include <sys/select.h>
 #include <errno.h>
 
 #include <apti18n.h>
@@ -343,23 +342,26 @@ pkgAcquire::MethodConfig *pkgAcquire::GetConfig(string Access)
 // Acquire::SetFds - Deal with readable FDs				/*{{{*/
 // ---------------------------------------------------------------------
 /* Collect FDs that have activity monitors into the fd sets */
-void pkgAcquire::SetFds(int &Fd,fd_set *RSet,fd_set *WSet)
+int pkgAcquire::SetFds(struct pollfd *fds)
 {
+   int i=0;
    for (Worker *I = Workers; I != 0; I = I->NextAcquire)
    {
       if (I->InReady == true && I->InFd >= 0)
       {
-	 if (Fd < I->InFd)
-	    Fd = I->InFd;
-	 FD_SET(I->InFd,RSet);
+	 fds[i].fd = I->InFd;
+         fds[i].events = POLLIN|POLLPRI;
+         i++;
       }
+
       if (I->OutReady == true && I->OutFd >= 0)
       {
-	 if (Fd < I->OutFd)
-	    Fd = I->OutFd;
-	 FD_SET(I->OutFd,WSet);
+	 fds[i].fd = I->OutFd;
+         fds[i].events = POLLOUT|POLLPRI;
+         i++;
       }
    }
+   return i;
 }
 									/*}}}*/
 // Acquire::RunFds - Deal with active FDs				/*{{{*/
@@ -367,14 +369,26 @@ void pkgAcquire::SetFds(int &Fd,fd_set *RSet,fd_set *WSet)
 /* Dispatch active FDs over to the proper workers. It is very important
    that a worker never be erased while this is running! The queue class
    should never erase a worker except during shutdown processing. */
-void pkgAcquire::RunFds(fd_set *RSet,fd_set *WSet)
+void pkgAcquire::RunFds(struct pollfd *fds, int max)
 {
    for (Worker *I = Workers; I != 0; I = I->NextAcquire)
    {
-      if (I->InFd >= 0 && FD_ISSET(I->InFd,RSet) != 0)
-	 I->InFdReady();
-      if (I->OutFd >= 0 && FD_ISSET(I->OutFd,WSet) != 0)
-	 I->OutFdReady();
+      int i;
+      for(i=0; i < max; i++)
+      {
+         if (I->InFd >= 0 && 
+             fds[i].fd == I->InFd && 
+             (fds[i].revents & POLLIN) == POLLIN)
+         {
+            I->InFdReady();
+         }
+         if (I->OutFd >= 0 && 
+             fds[i].fd == I->OutFd && 
+             (fds[i].revents & POLLOUT) == POLLOUT)
+         {
+            I->OutFdReady();
+         }
+      }
    }
 }
 									/*}}}*/
@@ -396,39 +410,31 @@ pkgAcquire::RunResult pkgAcquire::Run(int PulseIntervall)
    bool WasCancelled = false;
 
    // Run till all things have been acquired
-   struct timeval tv;
-   tv.tv_sec = 0;
-   tv.tv_usec = PulseIntervall; 
    while (ToFetch > 0)
    {
-      fd_set RFds;
-      fd_set WFds;
-      int Highest = 0;
-      FD_ZERO(&RFds);
-      FD_ZERO(&WFds);
-      SetFds(Highest,&RFds,&WFds);
+      struct pollfd fds[2048];
+      int n = SetFds(fds);
       
       int Res;
       do
       {
-	 Res = select(Highest+1,&RFds,&WFds,0,&tv);
+	 Res = poll(fds, n, PulseIntervall);
       }
       while (Res < 0 && errno == EINTR);
       
       if (Res < 0)
       {
-	 _error->Errno("select","Select has failed");
+	 _error->Errno("poll","Poll has failed");
 	 break;
       }
-	     
-      RunFds(&RFds,&WFds);
+	    
+      RunFds(fds, n);
       if (_error->PendingError() == true)
 	 break;
       
       // Timeout, notify the log class
       if (Res == 0 || (Log != 0 && Log->Update == true))
       {
-	 tv.tv_usec = PulseIntervall;
 	 for (Worker *I = Workers; I != 0; I = I->NextAcquire)
 	    I->Pulse();
 	 if (Log != 0 && Log->Pulse(this) == false)

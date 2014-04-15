@@ -74,7 +74,7 @@
 
 #include <stddef.h>
 #include <sys/time.h>
-#include <sys/select.h>
+#include <poll.h>
 
 #ifndef APT_10_CLEANER_HEADERS
 #include <unistd.h>
@@ -224,7 +224,7 @@ class pkgAcquire
     *  \param[out] WSet The set of file descriptors that should be
     *  watched for output.
     */
-   virtual void SetFds(int &Fd,fd_set *RSet,fd_set *WSet);
+   virtual int SetFds(struct pollfd *fds);
 
    /** Handle input from and output to file descriptors which select()
     *  has determined are ready.  The default implementation
@@ -236,7 +236,7 @@ class pkgAcquire
     *  \param WSet The set of file descriptors that are ready for
     *  output.
     */
-   virtual void RunFds(fd_set *RSet,fd_set *WSet);   
+   virtual void RunFds(struct pollfd *fds, int max);
 
    /** \brief Check for idle queues with ready-to-fetch items.
     *
