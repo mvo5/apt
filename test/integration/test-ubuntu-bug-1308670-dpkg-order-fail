@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+setupenvironment
+configarchitecture "amd64"
+
+setupaptarchive
+
+aptget dist-upgrade -s > dpkg-order.out
+testequal '
+' egrep '(util-linux|initscripts)' dpkg-order.out
+
