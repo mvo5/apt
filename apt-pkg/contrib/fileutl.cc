@@ -958,10 +958,10 @@ class FileFdPrivate {							/*{{{*/
 // FileFd::Open - Open a file						/*{{{*/
 // ---------------------------------------------------------------------
 /* The most commonly used open mode combinations are given with Mode */
-bool FileFd::Open(string FileName,unsigned int const Mode,CompressMode Compress, unsigned long const Perms)
+bool FileFd::Open(string FileName,unsigned int const Mode,CompressMode Compress, unsigned long const AccessMode)
 {
    if (Mode == ReadOnlyGzip)
-      return Open(FileName, ReadOnly, Gzip, Perms);
+      return Open(FileName, ReadOnly, Gzip, AccessMode);
 
    if (Compress == Auto && (Mode & WriteOnly) == WriteOnly)
       return FileFdError("Autodetection on %s only works in ReadOnly openmode!", FileName.c_str());
@@ -1028,9 +1028,9 @@ bool FileFd::Open(string FileName,unsigned int const Mode,CompressMode Compress,
 
    if (compressor == compressors.end())
       return FileFdError("Can't find a match for specified compressor mode for file %s", FileName.c_str());
-   return Open(FileName, Mode, *compressor, Perms);
+   return Open(FileName, Mode, *compressor, AccessMode);
 }
-bool FileFd::Open(string FileName,unsigned int const Mode,APT::Configuration::Compressor const &compressor, unsigned long const Perms)
+bool FileFd::Open(string FileName,unsigned int const Mode,APT::Configuration::Compressor const &compressor, unsigned long const AccessMode)
 {
    Close();
    Flags = AutoClose;
@@ -1080,11 +1080,18 @@ bool FileFd::Open(string FileName,unsigned int const Mode,APT::Configuration::Co
       TemporaryFileName = string(name);
       free(name);
 
-      if(Perms != 600 && fchmod(iFd, Perms) == -1)
+      // umask() will always set the umask and return the previous value, so
+      // we first set the umask and then reset it to the old value
+      mode_t const CurrentUmask = umask(0);
+      umask(CurrentUmask);
+      // calculate the actual file permissions (just like open/creat)
+      mode_t const FilePermissions = (AccessMode & ~CurrentUmask);
+
+      if(fchmod(iFd, FilePermissions) == -1)
           return FileFdErrno("fchmod", "Could not change permissions for temporary file %s", TemporaryFileName.c_str());
    }
    else
-      iFd = open(FileName.c_str(), fileflags, Perms);
+      iFd = open(FileName.c_str(), fileflags, AccessMode);
 
    this->FileName = FileName;
    if (iFd == -1 || OpenInternDescriptor(Mode, compressor) == false)
@@ -1705,7 +1712,6 @@ bool FileFd::Skip(unsigned long long Over)
 {
    if (d != NULL && (d->pipe == true || d->InternalStream() == true))
    {
-      d->seekpos += Over;
       char buffer[1024];
       while (Over != 0)
       {
