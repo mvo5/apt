@@ -11,4 +11,4 @@ setupaptarchive
 aptget dist-upgrade -s > dpkg-order.out
 testequal '
 ' egrep '(util-linux|initscripts)' dpkg-order.out
-
+cat dpkg-order.out

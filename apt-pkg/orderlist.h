@@ -90,7 +90,8 @@ class pkgOrderList : protected pkgCache::Namespace
                Removed = (1 << 6),        // Early Remove
                InList = (1 << 7),
                After = (1 << 8),
-               States = (UnPacked | Configured | Removed)};
+               States = (UnPacked | Configured | Removed)
+   };
 
    // Flag manipulators
    inline bool IsFlag(PkgIterator Pkg,unsigned long F) {return (Flags[Pkg->ID] & F) == F;};
@@ -105,6 +106,9 @@ class pkgOrderList : protected pkgCache::Namespace
    bool IsMissing(PkgIterator Pkg) APT_PURE;
    void WipeFlags(unsigned long F);
    void SetFileList(std::string *FileList) {this->FileList = FileList;};
+
+   // meep
+   short GetFlags(Package *Pkg) { return Flags[Pkg->ID]; };
 
    // Accessors
    inline iterator begin() {return List;};

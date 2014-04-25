@@ -1020,6 +1020,89 @@ pkgPackageManager::OrderResult pkgPackageManager::OrderInstall()
    // Sanity check
    for (pkgOrderList::iterator I = List->begin(); I != List->end(); ++I)
    {
+      PkgIterator Pkg(Cache,*I);
+      VerIterator InstallVer = VerIterator(Cache,Cache[Pkg].InstallVer);
+      if (InstallVer == 0) {
+         std::cerr << "No InstallVer, skipping: "
+                   << Pkg.FullName() << std::endl;
+         continue;
+      }
+      std::cerr << "Looking at " << Pkg.FullName() << std::endl;
+
+      // go over all the dependencies of the to-be-installed pkg and check
+      // if they are ok
+      for (DepIterator D = InstallVer.DependsList(); D.end() == false; )
+      {
+         // Compute a single dependency element (glob or)
+	 pkgCache::DepIterator Start, End;
+	 D.GlobOr(Start,End);
+
+         // check type "Depends"
+         if (End->Type == pkgCache::Dep::Depends)
+         {
+            std::cerr << " Checking dependency "
+                      << Start << std::endl;
+
+            // FIXME: deal with or-groups
+            bool bad = false;
+            
+            if(Cache[Start.TargetPkg()].InstallVer ==
+               Start.TargetPkg().CurrentVer())
+            {
+               std::cerr << "  Skipping (no change) " << Start << std::endl;
+               continue;
+            }
+
+            // now check if the dependency is configured *before* we 
+            // are at the current pkg
+            for (pkgOrderList::iterator J = List->begin();
+                 J != List->end(); ++J)
+            {
+               PkgIterator CurPkg(Cache, *J);
+               if (CurPkg == Pkg)
+                  break;
+               std::cerr << "   Looking at " << CurPkg.FullName() << std::endl;
+               // if the CurPkg is the required dependency we are good
+               // and can stop
+               VerIterator CurPkgInstVer = VerIterator(Cache, Cache[CurPkg].InstallVer);
+               if(CurPkgInstVer && 
+                  Start.TargetPkg() == CurPkg &&
+                  Start.IsSatisfied(CurPkgInstVer))
+               {
+                  std::cerr << "flags for: " << CurPkg.FullName()
+                            << " " << List->GetFlags(*J) 
+                            << std::endl;
+
+                  if(List->IsFlag(*J, pkgOrderList::UnPacked))
+                  {
+                     std::cerr << "   Found unpack " 
+                               << CurPkgInstVer.ParentPkg().FullName() 
+                               << " for " << Start
+                               << std::endl;
+                     bad = true;
+                  }
+                  if(List->IsFlag(*J, pkgOrderList::Configured))
+                  {
+                     std::cerr << "   Found configure " 
+                               << CurPkgInstVer.ParentPkg().FullName() 
+                               << " for " << Start
+                               << std::endl;
+                     bad = false;
+                  }
+               }
+            }
+            if(bad == true)
+            {
+               std::cerr << "order violation " << Pkg << " " 
+                         << Start << std::endl;
+               _error->Error("Order violation");
+               return Failed;
+            }
+         }
+
+      }
+
+      // simple test
       if (List->IsFlag(*I,pkgOrderList::Configured) == false)
       {
 	 _error->Error("Internal error, packages left unconfigured. %s",
