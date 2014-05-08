@@ -28,6 +28,8 @@ class CommandLine;
 
 #define RAMFS_MAGIC     0x858458f6
 
+APT_PUBLIC bool DoClean(CommandLine &Cmd);
+APT_PUBLIC bool DoJanitor(CommandLine &Cmd);
 APT_PUBLIC bool DoInstall(CommandLine &Cmd);
 
 bool DoCacheManipulationFromCommandLine(CommandLine &CmdL, CacheFile &Cache,

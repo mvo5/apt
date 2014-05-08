@@ -86,6 +86,9 @@ int main(int argc, const char *argv[])					/*{{{*/
                                    // for compat with muscle memory
                                    {"dist-upgrade",&DoDistUpgrade},
 
+                                   // cleanup
+				   {"janitor",&DoJanitor},
+
                                    // misc
                                    {"edit-sources",&EditSources},
 

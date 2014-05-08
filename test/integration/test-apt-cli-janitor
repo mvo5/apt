@@ -34,7 +34,7 @@ Janitor...
 The following packages will be REMOVED:
   foobar*
 0 upgraded, 0 newly installed, 1 to remove and 1 not upgraded.
-Purg foobar" aptget janitor -s
+Purg foobar" apt janitor -s
 
 # with non-downloadable packages
 testequal "Reading package lists...
@@ -44,6 +44,6 @@ The following packages will be REMOVED:
   foo* foobar*
 0 upgraded, 0 newly installed, 2 to remove and 1 not upgraded.
 Purg foo [1.0]
-Purg foobar" aptget janitor --non-downloadable -s
+Purg foobar" apt janitor --non-downloadable -s
 
 

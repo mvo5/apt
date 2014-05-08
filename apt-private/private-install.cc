@@ -801,3 +801,88 @@ bool DoInstall(CommandLine &CmdL)
    return InstallPackages(Cache,false);   
 }
 									/*}}}*/
+
+// DoJanitor - Cleanup $stuff			                 	/*{{{*/
+// ----------------------------------------------------------------------------
+/* Do common cleanup tasks like:
+  - apt-get clean
+  - apt-get autoremove
+  - clean rc pkgs 
+  - (optional) clean non-downloadable pkgs
+ */
+bool DoJanitor(CommandLine &/*CmdL*/)
+{
+   CacheFile Cache;
+   Cache.OpenForInstall();
+
+   OpTextProgress Progress(*_config);
+   Progress.OverallProgress(0,
+                            Cache->Head().PackageCount, 
+                            1,
+                            _("Janitor"));
+
+   // cleanup of rc/non-downloadable
+   pkgCache::PkgIterator I = Cache->PkgBegin();
+   int Done=0;
+   for (;I.end() != true; ++I, ++Done)
+   {
+      if (Done % 50 == 0)
+	 Progress.Progress(Done);
+
+      if (I->CurrentVer != 0 && Cache[I].Garbage)
+         Cache->MarkDelete(I, false, 0, false);
+
+      if (I->CurrentVer == 0 && 
+          I->CurrentState == pkgCache::State::ConfigFiles)
+         Cache->MarkDelete(I, true, 0, false);
+      
+      if(_config->FindB("Apt::Get::Jantior-Non-Downloadable", false) == true &&
+         I->CurrentVer != 0 &&
+         Cache[I].CandidateVerIter(Cache).Downloadable() == false)
+         Cache->MarkDelete(I, true, 0, false);
+         
+   }
+   Progress.Done();
+
+   // deal with the fallout
+   pkgProblemResolver Fix(Cache);
+   Fix.Resolve(true);
+
+   return InstallPackages(Cache, false);
+}
+									/*}}}*/
+// DoClean - Remove download archives					/*{{{*/
+// ---------------------------------------------------------------------
+/* */
+bool DoClean(CommandLine &)
+{
+   std::string const archivedir = _config->FindDir("Dir::Cache::archives");
+   std::string const pkgcache = _config->FindFile("Dir::cache::pkgcache");
+   std::string const srcpkgcache = _config->FindFile("Dir::cache::srcpkgcache");
+
+   if (_config->FindB("APT::Get::Simulate") == true)
+   {
+      std::cout << "Del " << archivedir << "* " << archivedir << "partial/*"<< std::endl
+                << "Del " << pkgcache << " " << srcpkgcache << std::endl;
+      return true;
+   }
+   
+   // Lock the archive directory
+   FileFd Lock;
+   if (_config->FindB("Debug::NoLocking",false) == false)
+   {
+      int lock_fd = GetLock(archivedir + "lock");
+      if (lock_fd < 0)
+	 return _error->Error(_("Unable to lock the download directory"));
+      Lock.Fd(lock_fd);
+   }
+   
+   pkgAcquire Fetcher;
+   Fetcher.Clean(archivedir);
+   Fetcher.Clean(archivedir + "partial/");
+
+   pkgCacheFile::RemoveCaches();
+
+   return true;
+}
+									/*}}}*/

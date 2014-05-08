@@ -548,41 +548,6 @@ static bool DoDSelectUpgrade(CommandLine &)
    return InstallPackages(Cache,false);
 }
 									/*}}}*/
-// DoClean - Remove download archives					/*{{{*/
-// ---------------------------------------------------------------------
-/* */
-static bool DoClean(CommandLine &)
-{
-   std::string const archivedir = _config->FindDir("Dir::Cache::archives");
-   std::string const pkgcache = _config->FindFile("Dir::cache::pkgcache");
-   std::string const srcpkgcache = _config->FindFile("Dir::cache::srcpkgcache");
-
-   if (_config->FindB("APT::Get::Simulate") == true)
-   {
-      cout << "Del " << archivedir << "* " << archivedir << "partial/*"<< endl
-	   << "Del " << pkgcache << " " << srcpkgcache << endl;
-      return true;
-   }
-   
-   // Lock the archive directory
-   FileFd Lock;
-   if (_config->FindB("Debug::NoLocking",false) == false)
-   {
-      int lock_fd = GetLock(archivedir + "lock");
-      if (lock_fd < 0)
-	 return _error->Error(_("Unable to lock the download directory"));
-      Lock.Fd(lock_fd);
-   }
-   
-   pkgAcquire Fetcher;
-   Fetcher.Clean(archivedir);
-   Fetcher.Clean(archivedir + "partial/");
-
-   pkgCacheFile::RemoveCaches();
-
-   return true;
-}
-									/*}}}*/
 // DoAutoClean - Smartly remove downloaded archives			/*{{{*/
 // ---------------------------------------------------------------------
 /* This is similar to clean but it only purges things that cannot be 
@@ -703,46 +668,6 @@ static bool DoCheck(CommandLine &)
    Cache.CheckDeps();
    
    return true;
-}
-									/*}}}*/
-// DoJanitor - Cleanup $stuff				/*{{{*/
-// ---------------------------------------------------------------------
-/*  */
-static bool DoJanitor(CommandLine &)
-{
-   CacheFile Cache;
-   Cache.OpenForInstall();
-
-   OpTextProgress Progress(*_config);
-   Progress.OverallProgress(0,
-                            Cache->Head().PackageCount, 
-                            1,
-                            _("Janitor"));
-
-   pkgCache::PkgIterator I = Cache->PkgBegin();
-   int Done=0;
-   for (;I.end() != true; ++I, ++Done)
-   {
-      if (Done % 50 == 0)
-	 Progress.Progress(Done);
-      
-      if (I->CurrentVer == 0 && 
-          I->CurrentState == pkgCache::State::ConfigFiles)
-         Cache->MarkDelete(I, true, 0, false);
-      
-      if(_config->FindB("Apt::Get::Jantior-Non-Downloadable", false) == true &&
-         I->CurrentVer != 0 &&
-         Cache[I].CandidateVerIter(Cache).Downloadable() == false)
-         Cache->MarkDelete(I, true, 0, false);
-         
-   }
-   Progress.Done();
-
-   // deal with the fallout
-   pkgProblemResolver Fix(Cache);
-   Fix.Resolve(true);
-
-   return InstallPackages(Cache, false);
 }
 									/*}}}*/
 // DoSource - Fetch a source archive					/*{{{*/
@@ -1721,7 +1646,6 @@ int main(int argc,const char *argv[])					/*{{{*/
                                    {"clean",&DoClean},
                                    {"autoclean",&DoAutoClean},
                                    {"check",&DoCheck},
-				   {"janitor",&DoJanitor},
 				   {"source",&DoSource},
                                    {"download",&DoDownload},
                                    {"changelog",&DoChangelog},
