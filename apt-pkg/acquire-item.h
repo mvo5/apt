@@ -721,10 +721,11 @@ class pkgAcqIndex : public pkgAcquire::Item
     *  fallback is ".gz" or none.
     */
    pkgAcqIndex(pkgAcquire *Owner,std::string URI,std::string URIDesc,
-	       std::string ShortDesc, HashString ExpectedHash, 
+	       std::string ShortDesc,
+               HashString ExpectedHash=std::string(),
 	       std::string compressExt="");
    pkgAcqIndex(pkgAcquire *Owner, struct IndexTarget const * const Target,
-			 HashString const &ExpectedHash, indexRecords *MetaIndexParser);
+               HashString const &ExpectedHash, indexRecords *MetaIndexParser);
    void Init(std::string const &URI, std::string const &URIDesc, std::string const &ShortDesc);
 };
 									/*}}}*/
@@ -1106,6 +1107,11 @@ class pkgAcqFile : public pkgAcquire::Item
 	      bool IsIndexFile=false);
 };
 									/*}}}*/
+
+// FIXME: remove on the next API break - we don't need pkgAcqIndexTrans anymore
+typedef pkgAcqIndex pkgAcqIndexTrans;
+
+
 /** @} */
 
 #endif
