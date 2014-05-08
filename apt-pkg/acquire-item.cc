@@ -905,7 +905,20 @@ void pkgAcqIndex::Failed(string Message,pkgAcquire::MethodConfig *Cnf)	/*{{{*/
       Init(RealURI, Desc.Description, Desc.ShortDesc);
       return;
    }
-
+   
+   // FIXME: this really should use "IndexTarget::IsOptional()" but that
+   //        seems to be difficult without breaking ABI
+   if (ShortDesc().find("Translation") != 0 &&
+       (Cnf->LocalOnly == true ||
+        StringToBool(LookupTag(Message,"Transient-Failure"),false) == false))
+   {      
+      // Ignore this
+      Status = StatDone;
+      Complete = false;
+      Dequeue();
+      return;
+   }
+   
    // on decompression failure, remove bad versions in partial/
    if (Decompression && Erase) {
       string s = _config->FindDir("Dir::State::lists") + "partial/";
@@ -1052,60 +1065,6 @@ void pkgAcqIndex::Done(string Message,unsigned long long Size,string Hash,
 
    // FIXME: this points to a c++ string that goes out of scope
    Mode = decompProg.c_str();
-}
-									/*}}}*/
-// AcqIndexTrans::pkgAcqIndexTrans - Constructor			/*{{{*/
-// ---------------------------------------------------------------------
-/* The Translation file is added to the queue */
-pkgAcqIndexTrans::pkgAcqIndexTrans(pkgAcquire *Owner,
-			    string URI,string URIDesc,string ShortDesc) 
-  : pkgAcqIndex(Owner, URI, URIDesc, ShortDesc, HashString(), "")
-{
-}
-pkgAcqIndexTrans::pkgAcqIndexTrans(pkgAcquire *Owner, IndexTarget const *Target,
-			 HashString const &ExpectedHash, indexRecords const *MetaIndexParser)
-  : pkgAcqIndex(Owner, Target, ExpectedHash, MetaIndexParser)
-{
-}
-									/*}}}*/
-// AcqIndexTrans::Custom600Headers - Insert custom request headers	/*{{{*/
-// ---------------------------------------------------------------------
-string pkgAcqIndexTrans::Custom600Headers()
-{
-   string Final = _config->FindDir("Dir::State::lists");
-   Final += URItoFileName(RealURI);
-
-   struct stat Buf;
-   if (stat(Final.c_str(),&Buf) != 0)
-      return "\nFail-Ignore: true\nIndex-File: true";
-   return "\nFail-Ignore: true\nIndex-File: true\nLast-Modified: " + TimeRFC1123(Buf.st_mtime);
-}
-									/*}}}*/
-// AcqIndexTrans::Failed - Silence failure messages for missing files	/*{{{*/
-// ---------------------------------------------------------------------
-/* */
-void pkgAcqIndexTrans::Failed(string Message,pkgAcquire::MethodConfig *Cnf)
-{
-   size_t const nextExt = CompressionExtension.find(' ');
-   if (nextExt != std::string::npos)
-   {
-      CompressionExtension = CompressionExtension.substr(nextExt+1);
-      Init(RealURI, Desc.Description, Desc.ShortDesc);
-      Status = StatIdle;
-      return;
-   }
-
-   if (Cnf->LocalOnly == true || 
-       StringToBool(LookupTag(Message,"Transient-Failure"),false) == false)
-   {      
-      // Ignore this
-      Status = StatDone;
-      Complete = false;
-      Dequeue();
-      return;
-   }
-
-   Item::Failed(Message,Cnf);
 }
 									/*}}}*/
 pkgAcqMetaSig::pkgAcqMetaSig(pkgAcquire *Owner,				/*{{{*/
@@ -1420,86 +1379,42 @@ void pkgAcqMetaIndex::AuthDone(string Message)				/*{{{*/
 									/*}}}*/
 void pkgAcqMetaIndex::QueueIndexes(bool verify)				/*{{{*/
 {
-#if 0
-   /* Reject invalid, existing Release files (LP: #346386) (Closes: #627642)
-    * FIXME: Disabled; it breaks unsigned repositories without hashes */
-   if (!verify && FileExists(DestFile) && !MetaIndexParser->Load(DestFile))
-   {
-      Status = StatError;
-      ErrorText = MetaIndexParser->ErrorText;
-      return;
-   }
-#endif
-   bool transInRelease = false;
-   {
-      std::vector<std::string> const keys = MetaIndexParser->MetaKeys();
-      for (std::vector<std::string>::const_iterator k = keys.begin(); k != keys.end(); ++k)
-	 // FIXME: Feels wrong to check for hardcoded string here, but what should we do else…
-	 if (k->find("Translation-") != std::string::npos)
-	 {
-	    transInRelease = true;
-	    break;
-	 }
-   }
-
    for (vector <struct IndexTarget*>::const_iterator Target = IndexTargets->begin();
         Target != IndexTargets->end();
         ++Target)
    {
       HashString ExpectedIndexHash;
       const indexRecords::checkSum *Record = MetaIndexParser->Lookup((*Target)->MetaKey);
-      bool compressedAvailable = false;
-      if (Record == NULL)
+
+      // optional target that we do not have in the Release file are 
+      // skipped
+      if (verify == true && Record == NULL && (*Target)->IsOptional())
+         continue;
+
+      // targets without a hash record are a error when verify is required
+      if (verify == true && Record == NULL)
       {
-	 if ((*Target)->IsOptional() == true)
-	 {
-	    std::vector<std::string> types = APT::Configuration::getCompressionTypes();
-	    for (std::vector<std::string>::const_iterator t = types.begin(); t != types.end(); ++t)
-	       if (MetaIndexParser->Exists((*Target)->MetaKey + "." + *t) == true)
-	       {
-		  compressedAvailable = true;
-		  break;
-	       }
-	 }
-	 else if (verify == true)
-	 {
-	    Status = StatAuthError;
-	    strprintf(ErrorText, _("Unable to find expected entry '%s' in Release file (Wrong sources.list entry or malformed file)"), (*Target)->MetaKey.c_str());
-	    return;
-	 }
-      }
-      else
-      {
-	 ExpectedIndexHash = Record->Hash;
-	 if (_config->FindB("Debug::pkgAcquire::Auth", false))
-	 {
-	    std::cerr << "Queueing: " << (*Target)->URI << std::endl;
-	    std::cerr << "Expected Hash: " << ExpectedIndexHash.toStr() << std::endl;
-	    std::cerr << "For: " << Record->MetaKeyFilename << std::endl;
-	 }
-	 if (verify == true && ExpectedIndexHash.empty() == true && (*Target)->IsOptional() == false)
-	 {
-	    Status = StatAuthError;
-	    strprintf(ErrorText, _("Unable to find hash sum for '%s' in Release file"), (*Target)->MetaKey.c_str());
-	    return;
-	 }
+         Status = StatAuthError;
+         strprintf(ErrorText, _("Unable to find expected entry '%s' in Release file (Wrong sources.list entry or malformed file)"), (*Target)->MetaKey.c_str());
+         return;
       }
 
-      if ((*Target)->IsOptional() == true)
+      ExpectedIndexHash = Record->Hash;
+      if (_config->FindB("Debug::pkgAcquire::Auth", false))
       {
-	 if (transInRelease == false || Record != NULL || compressedAvailable == true)
-	 {
-	    if (_config->FindB("Acquire::PDiffs",true) == true && transInRelease == true &&
-		MetaIndexParser->Exists((*Target)->MetaKey + ".diff/Index") == true)
-	       new pkgAcqDiffIndex(Owner, (*Target)->URI, (*Target)->Description,
-				   (*Target)->ShortDesc, ExpectedIndexHash);
-	    else
-	       new pkgAcqIndexTrans(Owner, *Target, ExpectedIndexHash, MetaIndexParser);
-	 }
-	 continue;
+         std::cerr << "Queueing: " << (*Target)->URI << std::endl;
+         std::cerr << "Expected Hash: " << ExpectedIndexHash.toStr() << std::endl;
+         std::cerr << "For: " << Record->MetaKeyFilename << std::endl;
+      }
+      if (verify == true && ExpectedIndexHash.empty() == true)
+      {
+         Status = StatAuthError;
+         strprintf(ErrorText, _("Unable to find hash sum for '%s' in Release file"), (*Target)->MetaKey.c_str());
+         return;
       }
 
-      /* Queue Packages file (either diff or full packages files, depending
+      /* Queue the Index file (Packages, Sources, Translation-$foo
+         (either diff or full packages files, depending
          on the users option) - we also check if the PDiff Index file is listed
          in the Meta-Index file. Ideal would be if pkgAcqDiffIndex would test this
          instead, but passing the required info to it is to much hassle */
