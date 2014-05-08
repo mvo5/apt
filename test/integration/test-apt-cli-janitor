@@ -1,0 +1,49 @@
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture "i386"
+
+# local, not downloadable
+insertinstalledpackage 'foo' 'i386' '1.0'
+
+# installed and downloadable (should not be touched)
+insertinstalledpackage 'bar' 'i386' '1.0'
+insertpackage 'unstable' 'bar' 'i386' '2.0'
+
+# in dpkg rc state
+cat >> rootdir/var/lib/dpkg/status <<EOF
+
+Package: foobar
+Status: deinstall ok config-files
+Version: 1.0
+Architecture: all
+
+EOF
+
+setupaptarchive
+
+APTARCHIVE=$(readlink -f ./aptarchive)
+
+# packages in dpkg rc state
+testequal "Reading package lists...
+Building dependency tree...
+Janitor...
+The following packages will be REMOVED:
+  foobar*
+0 upgraded, 0 newly installed, 1 to remove and 1 not upgraded.
+Purg foobar" aptget janitor -s
+
+# with non-downloadable packages
+testequal "Reading package lists...
+Building dependency tree...
+Janitor...
+The following packages will be REMOVED:
+  foo* foobar*
+0 upgraded, 0 newly installed, 2 to remove and 1 not upgraded.
+Purg foo [1.0]
+Purg foobar" aptget janitor --non-downloadable -s
+
+
