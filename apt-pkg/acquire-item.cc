@@ -55,7 +55,8 @@ using namespace std;
 /* */
 pkgAcquire::Item::Item(pkgAcquire *Owner) : Owner(Owner), FileSize(0),
                        PartialSize(0), Mode(0), ID(0), Complete(false), 
-                       Local(false), QueueCounter(0)
+                       Local(false), QueueCounter(0), 
+                       ExpectedAdditionalItems(0)
 {
    Owner->Add(this);
    Status = StatIdle;
@@ -230,21 +231,22 @@ void pkgAcquire::Item::ReportMirrorFailure(string FailCode)
  * the original packages file
  */
 pkgAcqDiffIndex::pkgAcqDiffIndex(pkgAcquire *Owner,
-				 string URI,string URIDesc,string ShortDesc,
-				 HashString ExpectedHash)
-   : Item(Owner), RealURI(URI), ExpectedHash(ExpectedHash),
-     Description(URIDesc)
+                                 IndexTarget const *Target,
+				 HashString ExpectedHash,
+                                 indexRecords *MetaIndexParser)
+   : Item(Owner), ExpectedHash(ExpectedHash), Target(Target),
+     MetaIndexParser(MetaIndexParser)
 {
-   
    Debug = _config->FindB("Debug::pkgAcquire::Diffs",false);
 
-   Desc.Description = URIDesc + "/DiffIndex";
+   RealURI = Target->URI;
    Desc.Owner = this;
-   Desc.ShortDesc = ShortDesc;
-   Desc.URI = URI + ".diff/Index";
+   Desc.Description = Target->Description + "/DiffIndex";
+   Desc.ShortDesc = Target->ShortDesc;
+   Desc.URI = Target->URI + ".diff/Index";
 
    DestFile = _config->FindDir("Dir::State::lists") + "partial/";
-   DestFile += URItoFileName(URI) + string(".DiffIndex");
+   DestFile += URItoFileName(Target->URI) + string(".DiffIndex");
 
    if(Debug)
       std::clog << "pkgAcqDiffIndex: " << Desc.URI << std::endl;
@@ -447,8 +449,7 @@ void pkgAcqDiffIndex::Failed(string Message,pkgAcquire::MethodConfig * /*Cnf*/)/
       std::clog << "pkgAcqDiffIndex failed: " << Desc.URI << " with " << Message << std::endl
 		<< "Falling back to normal index file acquire" << std::endl;
 
-   new pkgAcqIndex(Owner, RealURI, Description, Desc.ShortDesc, 
-		   ExpectedHash);
+   new pkgAcqIndex(Owner, Target, ExpectedHash, MetaIndexParser);
 
    Complete = false;
    Status = StatDone;
@@ -807,7 +808,8 @@ void pkgAcqIndexMergeDiffs::Done(string Message,unsigned long long Size,string M
 pkgAcqIndex::pkgAcqIndex(pkgAcquire *Owner,
 			 string URI,string URIDesc,string ShortDesc,
 			 HashString ExpectedHash, string comprExt)
-   : Item(Owner), RealURI(URI), ExpectedHash(ExpectedHash)
+   : Item(Owner), RealURI(URI), ExpectedHash(ExpectedHash), Target(0),
+     MetaIndexParser(0)
 {
    if(comprExt.empty() == true)
    {
@@ -823,7 +825,7 @@ pkgAcqIndex::pkgAcqIndex(pkgAcquire *Owner,
    Init(URI, URIDesc, ShortDesc);
 }
 pkgAcqIndex::pkgAcqIndex(pkgAcquire *Owner, IndexTarget const *Target,
-			 HashString const &ExpectedHash, indexRecords const *MetaIndexParser)
+			 HashString const &ExpectedHash, indexRecords *MetaIndexParser)
    : Item(Owner), RealURI(Target->URI), ExpectedHash(ExpectedHash)
 {
    // autoselect the compression method
@@ -850,6 +852,10 @@ pkgAcqIndex::pkgAcqIndex(pkgAcquire *Owner, IndexTarget const *Target,
    else
      Verify = true;
 
+   // we need this in Init()
+   this->Target = Target;
+   this->MetaIndexParser = MetaIndexParser;
+
    Init(Target->URI, Target->Description, Target->ShortDesc);
 }
 									/*}}}*/
@@ -862,10 +868,27 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc, string const &S
    DestFile += URItoFileName(URI);
 
    std::string const comprExt = CompressionExtension.substr(0, CompressionExtension.find(' '));
+   std::string MetaKey;
    if (comprExt == "uncompressed")
+   {
       Desc.URI = URI;
+      if(Target)
+         MetaKey = string(Target->MetaKey);
+   }
    else
+   {
       Desc.URI = URI + '.' + comprExt;
+      if(Target)
+         MetaKey = string(Target->MetaKey) + '.' + comprExt;
+   }
+
+   // load the filesize
+   if(MetaIndexParser)
+   {
+      indexRecords::checkSum *Record = MetaIndexParser->Lookup(MetaKey);
+      if(Record)
+         FileSize = Record->Size;
+   }
 
    Desc.Description = URIDesc;
    Desc.Owner = this;
@@ -887,7 +910,7 @@ string pkgAcqIndex::Custom600Headers()
    string msg = "\nIndex-File: true";
    // FIXME: this really should use "IndexTarget::IsOptional()" but that
    //        seems to be difficult without breaking ABI
-   if (ShortDesc().find("Translation") != 0)
+   if (Target && Target->IsOptional())
       msg += "\nFail-Ignore: true";
    struct stat Buf;
    if (stat(Final.c_str(),&Buf) == 0)
@@ -906,9 +929,7 @@ void pkgAcqIndex::Failed(string Message,pkgAcquire::MethodConfig *Cnf)	/*{{{*/
       return;
    }
    
-   // FIXME: this really should use "IndexTarget::IsOptional()" but that
-   //        seems to be difficult without breaking ABI
-   if (ShortDesc().find("Translation") != 0 &&
+   if (Target && Target->IsOptional() &&
        (Cnf->LocalOnly == true ||
         StringToBool(LookupTag(Message,"Transient-Failure"),false) == false))
    {      
@@ -980,7 +1001,7 @@ void pkgAcqIndex::Done(string Message,unsigned long long Size,string Hash,
       FinalFile += URItoFileName(RealURI);
       Rename(DestFile,FinalFile);
       chmod(FinalFile.c_str(),0644);
-      
+
       /* We restore the original name to DestFile so that the clean operation
          will work OK */
       DestFile = _config->FindDir("Dir::State::lists") + "partial/";
@@ -989,6 +1010,7 @@ void pkgAcqIndex::Done(string Message,unsigned long long Size,string Hash,
       // Remove the compressed version.
       if (Erase == true)
 	 unlink(DestFile.c_str());
+
       return;
    }
 
@@ -1104,6 +1126,9 @@ pkgAcqMetaSig::pkgAcqMetaSig(pkgAcquire *Owner,				/*{{{*/
       Rename(Final,LastGoodSig);
    }
 
+   // we expect the indextargets + one additional Release file
+   ExpectedAdditionalItems = IndexTargets->size() + 1;
+
    QueueURI(Desc);
 }
 									/*}}}*/
@@ -1156,6 +1181,9 @@ void pkgAcqMetaSig::Done(string Message,unsigned long long Size,string MD5,
 
    Complete = true;
 
+   // at this point pkgAcqMetaIndex takes over
+   ExpectedAdditionalItems = 0;
+
    // put the last known good file back on i-m-s hit (it will
    // be re-verified again)
    // Else do nothing, we have the new file in DestFile then
@@ -1172,6 +1200,9 @@ void pkgAcqMetaSig::Done(string Message,unsigned long long Size,string MD5,
 void pkgAcqMetaSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf)/*{{{*/
 {
    string Final = _config->FindDir("Dir::State::lists") + URItoFileName(RealURI);
+
+   // at this point pkgAcqMetaIndex takes over
+   ExpectedAdditionalItems = 0;
 
    // if we get a network error we fail gracefully
    if(Status == StatTransientNetworkError)
@@ -1222,6 +1253,9 @@ pkgAcqMetaIndex::pkgAcqMetaIndex(pkgAcquire *Owner,			/*{{{*/
    Desc.Owner = this;
    Desc.ShortDesc = ShortDesc;
    Desc.URI = URI;
+
+   // we expect more item
+   ExpectedAdditionalItems = IndexTargets->size();
 
    QueueURI(Desc);
 }
@@ -1379,6 +1413,9 @@ void pkgAcqMetaIndex::AuthDone(string Message)				/*{{{*/
 									/*}}}*/
 void pkgAcqMetaIndex::QueueIndexes(bool verify)				/*{{{*/
 {
+   // at this point the real Items are loaded in the fetcher
+   ExpectedAdditionalItems = 0;
+
    for (vector <struct IndexTarget*>::const_iterator Target = IndexTargets->begin();
         Target != IndexTargets->end();
         ++Target)
@@ -1420,8 +1457,7 @@ void pkgAcqMetaIndex::QueueIndexes(bool verify)				/*{{{*/
          instead, but passing the required info to it is to much hassle */
       if(_config->FindB("Acquire::PDiffs",true) == true && (verify == false ||
 	  MetaIndexParser->Exists((*Target)->MetaKey + ".diff/Index") == true))
-	 new pkgAcqDiffIndex(Owner, (*Target)->URI, (*Target)->Description,
-			     (*Target)->ShortDesc, ExpectedIndexHash);
+	 new pkgAcqDiffIndex(Owner, *Target, ExpectedIndexHash, MetaIndexParser);
       else
 	 new pkgAcqIndex(Owner, *Target, ExpectedIndexHash, MetaIndexParser);
    }
@@ -1584,6 +1620,10 @@ pkgAcqMetaClearSig::pkgAcqMetaClearSig(pkgAcquire *Owner,		/*{{{*/
 {
    SigFile = DestFile;
 
+   // index targets + (worst case:) Release/Release.gpg
+   ExpectedAdditionalItems = IndexTargets->size() + 2;
+
+
    // keep the old InRelease around in case of transistent network errors
    string const Final = _config->FindDir("Dir::State::lists") + URItoFileName(RealURI);
    if (RealFileExists(Final) == true)
@@ -1626,6 +1666,9 @@ string pkgAcqMetaClearSig::Custom600Headers()
 									/*}}}*/
 void pkgAcqMetaClearSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf) /*{{{*/
 {
+   // we failed, we will not get additional items from this method
+   ExpectedAdditionalItems = 0;
+
    if (AuthPass == false)
    {
       // Remove the 'old' InRelease file if we try Release.gpg now as otherwise
