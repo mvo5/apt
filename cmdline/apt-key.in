@@ -231,6 +231,65 @@ remove_key() {
     echo "OK"
 }
 
+# return "0" if recv/recv-key is used
+uses_gpg_recv_keys() {
+    while [ -n "$1" ]; do
+        if [ "$1" = "--recv-key" ] || [ "$1" = "--recv" ]; then
+            return 0
+        fi
+        if [ "$1" = "--recv-keys" ]; then
+            echo "WARNING --recv-keys not supported"
+            return 0
+        fi
+        shift
+    done;
+    return 1
+}
+
+# ensure that the keyis is a v4 key (160bit)
+verify_keyid_is_v4() {
+    if [ "${#keyid}" -eq $((160/8)) ]; then
+        return 0
+    fi
+    return 1
+}
+
+# takes the commandline and extract the relevant --recv parameters
+gpg_recv_key_with_verify_from_cmdline() {
+    keyid=""
+    keyserver=""
+    while [ -n "$1" ]; do
+        if [ "$1" = "--recv-key" ] || [ "$1" = "--recv" ]; then
+            keyid="$2"
+            if ! verify_keyid_is_v4 $keyid; then
+                echo "WARNING only support v4 keyids"
+                return 0
+            fi
+        fi
+        if [ "$1" = "--keyserver" ]; then
+            keyserver="$2"
+        fi
+        shift
+    done
+    gpg_recv_key_with_verify $keyid $keyserver
+}
+
+gpg_recv_key_with_verify() {
+    keyid="$1"
+    keyserver="$2"
+    TMP_KEYRING=$(mktemp)
+    trap "rm -f $TMP_KEYRING" 0 HUP INT QUIT ILL ABRT FPE SEGV PIPE TERM
+    # get the key into a temp keyring first
+    $GPG_CMD  --keyring $TMP_KEYRING --keyserver $keyserver --recv-key $keyid 
+    # verify that the keyid matches 
+    got_keyid=$($GPG_CMD --keyring $TMP_KEYRING --list-keys --with-colons | grep ^pub | cut -d: -f5)
+    # and then import from the keyid (extra paranoia)
+    if [ "$keyid" = "$got_keyid" ]; then
+        $GPG_CMD --quiet --batch --keyring $TMP_KEYRING --export $keyid | $GPG --import
+    else
+        echo "WARNING expected $keyid but got $got_keyid"
+    fi
+}
 
 usage() {
     echo "Usage: apt-key [--keyring file] [command] [arguments]"
@@ -349,8 +408,13 @@ case "$command" in
         ;;
     adv*)
         init_keyring "$TRUSTEDFILE"
-        echo "Executing: $GPG $*"
-        $GPG $*
+        # verify that --recv-key,--recv-keys uses only the long keyid
+        if uses_gpg_recv_keys $*; then
+            gpg_recv_key_with_verify_from_cmdline $*
+        else
+            echo "Executing: $GPG $*"
+            $GPG $*
+        fi
         ;;
     help)
         usage
