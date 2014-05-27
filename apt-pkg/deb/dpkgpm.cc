@@ -10,40 +10,45 @@
 // Includes								/*{{{*/
 #include <config.h>
 
-#include <apt-pkg/dpkgpm.h>
-#include <apt-pkg/error.h>
+#include <apt-pkg/cachefile.h>
 #include <apt-pkg/configuration.h>
 #include <apt-pkg/depcache.h>
+#include <apt-pkg/dpkgpm.h>
+#include <apt-pkg/error.h>
+#include <apt-pkg/fileutl.h>
+#include <apt-pkg/install-progress.h>
+#include <apt-pkg/packagemanager.h>
 #include <apt-pkg/pkgrecords.h>
 #include <apt-pkg/strutl.h>
-#include <apt-pkg/fileutl.h>
-#include <apt-pkg/cachefile.h>
-#include <apt-pkg/packagemanager.h>
-#include <apt-pkg/install-progress.h>
+#include <apt-pkg/cacheiterators.h>
+#include <apt-pkg/macros.h>
+#include <apt-pkg/pkgcache.h>
 
-#include <unistd.h>
-#include <stdlib.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
+#include <pty.h>
+#include <pwd.h>
+#include <signal.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+#include <sys/time.h>
 #include <sys/wait.h>
-#include <signal.h>
-#include <errno.h>
-#include <string.h>
-#include <stdio.h>
-#include <string.h>
-#include <algorithm>
-#include <sstream>
-#include <map>
-#include <pwd.h>
-#include <grp.h>
-#include <iomanip>
-
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
-#include <pty.h>
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <apti18n.h>
 									/*}}}*/
@@ -394,16 +399,24 @@ bool pkgDPkgPM::SendPkgsInfo(FILE * const F, unsigned int const &Version)
    that are due to be installed. */
 bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
 {
+   bool result = true;
+
    Configuration::Item const *Opts = _config->Tree(Cnf);
    if (Opts == 0 || Opts->Child == 0)
       return true;
    Opts = Opts->Child;
+
+   sighandler_t old_sigpipe = signal(SIGPIPE, SIG_IGN);
    
    unsigned int Count = 1;
    for (; Opts != 0; Opts = Opts->Next, Count++)
    {
       if (Opts->Value.empty() == true)
          continue;
+
+      if(_config->FindB("Debug::RunScripts", false) == true)
+         std::clog << "Running external script with list of all .deb file: '"
+                   << Opts->Value << "'" << std::endl;
 
       // Determine the protocol version
       string OptSec = Opts->Value;
@@ -419,8 +432,10 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
       std::set<int> KeepFDs;
       MergeKeepFdsFromConfiguration(KeepFDs);
       int Pipes[2];
-      if (pipe(Pipes) != 0)
-	 return _error->Errno("pipe","Failed to create IPC pipe to subprocess");
+      if (pipe(Pipes) != 0) {
+         result = _error->Errno("pipe","Failed to create IPC pipe to subprocess");
+         break;
+      }
       if (InfoFD != (unsigned)Pipes[0])
 	 SetCloseExec(Pipes[0],true);
       else
@@ -454,8 +469,10 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
       }
       close(Pipes[0]);
       FILE *F = fdopen(Pipes[1],"w");
-      if (F == 0)
-	 return _error->Errno("fdopen","Faild to open new FD");
+      if (F == 0) {
+         result = _error->Errno("fdopen","Faild to open new FD");
+         break;
+      }
       
       // Feed it the filenames.
       if (Version <= 1)
@@ -483,11 +500,14 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
       fclose(F);
       
       // Clean up the sub process
-      if (ExecWait(Process,Opts->Value.c_str()) == false)
-	 return _error->Error("Failure running script %s",Opts->Value.c_str());
+      if (ExecWait(Process,Opts->Value.c_str()) == false) {
+	 result = _error->Error("Failure running script %s",Opts->Value.c_str());
+         break;
+      }
    }
+   signal(SIGPIPE, old_sigpipe);
 
-   return true;
+   return result;
 }
 									/*}}}*/
 // DPkgPM::DoStdin - Read stdin and pass to slave pty			/*{{{*/
@@ -567,7 +587,6 @@ void pkgDPkgPM::ProcessDpkgStatusLine(char *line)
    std::string prefix = APT::String::Strip(list[0]);
    std::string pkgname;
    std::string action;
-   ostringstream status;
 
    // "processing" has the form "processing: action: pkg or trigger"
    // with action = ["install", "configure", "remove", "purge", "disappear",
@@ -596,7 +615,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(char *line)
       errors look like this:
       'status: /var/cache/apt/archives/krecipes_0.8.1-0ubuntu1_i386.deb : error : trying to overwrite `/usr/share/doc/kde/HTML/en/krecipes/krectip.png', which is also in package krecipes-data 
       and conffile-prompt like this
-      'status: conffile-prompt: conffile : 'current-conffile' 'new-conffile' useredited distedited
+      'status:/etc/compiz.conf/compiz.conf :  conffile-prompt: 'current-conffile' 'new-conffile' useredited distedited
    */
    if (prefix == "status")
    {
@@ -608,7 +627,7 @@ void pkgDPkgPM::ProcessDpkgStatusLine(char *line)
          WriteApportReport(list[1].c_str(), list[3].c_str());
          return;
       }
-      else if(action == "conffile")
+      else if(action == "conffile-prompt")
       {
          d->progress->ConffilePrompt(list[1], PackagesDone, PackagesTotal,
                                      list[3]);
@@ -1027,16 +1046,25 @@ bool pkgDPkgPM::Go(int StatusFd)
 
 void pkgDPkgPM::StartPtyMagic()
 {
-   // setup the pty and stuff
-   struct	winsize win;
-
-   // if tcgetattr does not return zero there was a error
-   // and we do not do any pty magic
-   _error->PushToStack();
-   if (tcgetattr(STDOUT_FILENO, &d->tt) == 0)
+   if (_config->FindB("Dpkg::Use-Pty", true) == false)
    {
-       ioctl(1, TIOCGWINSZ, (char *)&win);
-       if (openpty(&d->master, &d->slave, NULL, &d->tt, &win) < 0)
+      d->master = d->slave = -1;
+      return;
+   }
+
+   // setup the pty and stuff
+   struct winsize win;
+
+   // if tcgetattr for both stdin/stdout returns 0 (no error)
+   // we do the pty magic
+   _error->PushToStack();
+   if (tcgetattr(STDIN_FILENO, &d->tt) == 0 &&
+       tcgetattr(STDOUT_FILENO, &d->tt) == 0)
+   {
+       if (ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&win) < 0)
+       {
+           _error->Errno("ioctl", _("ioctl(TIOCGWINSZ) failed"));
+       } else if (openpty(&d->master, &d->slave, NULL, &d->tt, &win) < 0)
        {
            _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
            d->master = d->slave = -1;
@@ -1182,7 +1210,7 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
    StartPtyMagic();
 
    // Tell the progress that its starting and fork dpkg 
-   d->progress->Start();
+   d->progress->Start(d->master);
 
    // this loop is runs once per dpkg operation
    vector<Item>::const_iterator I = List.begin();
@@ -1389,12 +1417,17 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
 	 if(d->slave >= 0 && d->master >= 0) 
 	 {
 	    setsid();
-	    ioctl(d->slave, TIOCSCTTY, 0);
-	    close(d->master);
-	    dup2(d->slave, 0);
-	    dup2(d->slave, 1);
-	    dup2(d->slave, 2);
-	    close(d->slave);
+	    int res = ioctl(d->slave, TIOCSCTTY, 0);
+            if (res < 0) {
+               std::cerr << "ioctl(TIOCSCTTY) failed for fd: " 
+                         << d->slave << std::endl;
+            } else {
+               close(d->master);
+               dup2(d->slave, 0);
+               dup2(d->slave, 1);
+               dup2(d->slave, 2);
+               close(d->slave);
+            }
 	 }
 	 close(fd[0]); // close the read end of the pipe
 
@@ -1513,28 +1546,18 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
 	 // here but keep the loop going and just report it as a error
 	 // for later
 	 bool const stopOnError = _config->FindB("Dpkg::StopOnError",true);
-	 
-	 if(stopOnError)
-	    RunScripts("DPkg::Post-Invoke");
 
-	 if (WIFSIGNALED(Status) != 0 && WTERMSIG(Status) == SIGSEGV) 
+	 if (WIFSIGNALED(Status) != 0 && WTERMSIG(Status) == SIGSEGV)
 	    strprintf(d->dpkg_error, "Sub-process %s received a segmentation fault.",Args[0]);
 	 else if (WIFEXITED(Status) != 0)
 	    strprintf(d->dpkg_error, "Sub-process %s returned an error code (%u)",Args[0],WEXITSTATUS(Status));
-	 else 
+	 else
 	    strprintf(d->dpkg_error, "Sub-process %s exited unexpectedly",Args[0]);
+	 _error->Error("%s", d->dpkg_error.c_str());
 
-	 if(d->dpkg_error.size() > 0)
-	    _error->Error("%s", d->dpkg_error.c_str());
-
-	 if(stopOnError) 
-	 {
-	    CloseLog();
-            StopPtyMagic();
-            d->progress->Stop();
-	    return false;
-	 }
-      }      
+	 if(stopOnError)
+	    break;
+      }
    }
    // dpkg is done at this point
    d->progress->Stop();
@@ -1565,10 +1588,10 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
    }
 
    Cache.writeStateFile(NULL);
-   return true;
+   return d->dpkg_error.empty();
 }
 
-void SigINT(int sig) {
+void SigINT(int /*sig*/) {
    pkgPackageManager::SigINTStop = true;
 }
 									/*}}}*/
@@ -1595,7 +1618,7 @@ void pkgDPkgPM::WriteApportReport(const char *pkgpath, const char *errormsg)
    string::size_type pos;
    FILE *report;
 
-   if (_config->FindB("Dpkg::ApportFailureReport", false) == false)
+   if (_config->FindB("Dpkg::ApportFailureReport", true) == false)
    {
       std::clog << "configured to not write apport reports" << std::endl;
       return;
@@ -1648,7 +1671,7 @@ void pkgDPkgPM::WriteApportReport(const char *pkgpath, const char *errormsg)
    io_errors.push_back(string("failed in write on buffer copy for %s"));
    io_errors.push_back(string("short read on buffer copy for %s"));
 
-   for (vector<string>::iterator I = io_errors.begin(); I != io_errors.end(); I++)
+   for (vector<string>::iterator I = io_errors.begin(); I != io_errors.end(); ++I)
    {
       vector<string> list = VectorizeString(dgettext("dpkg", (*I).c_str()), '%');
       if (list.size() > 1) {
@@ -1763,13 +1786,11 @@ void pkgDPkgPM::WriteApportReport(const char *pkgpath, const char *errormsg)
    string histfile_name = _config->FindFile("Dir::Log::History");
    if (!histfile_name.empty())
    {
-      FILE *log = NULL;
-      char buf[1024];
-
       fprintf(report, "DpkgHistoryLog:\n");
-      log = fopen(histfile_name.c_str(),"r");
+      FILE* log = fopen(histfile_name.c_str(),"r");
       if(log != NULL)
       {
+	 char buf[1024];
 	 while( fgets(buf, sizeof(buf), log) != NULL)
 	    fprintf(report, " %s", buf);
 	 fclose(log);

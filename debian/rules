@@ -134,6 +134,7 @@ libapt-pkg-doc: build-debiandoc
 #
 # libapt-pkg-doc install
 #
+	rm -f $(BLD)/doc/doxygen/html/*.map $(BLD)/doc/doxygen/html/*.md5
 	dh_installdocs -p$@ $(BLD)/docs/design* \
 			    $(BLD)/docs/dpkg-tech* \
 			    $(BLD)/docs/files* \
@@ -145,7 +146,7 @@ libapt-pkg-doc: build-debiandoc
 
 	dh_installchangelogs -p$@
 	dh_strip -p$@
-	dh_compress -p$@
+	dh_compress -p$@ -X.xhtml
 	dh_fixperms -p$@
 	dh_installdeb -p$@
 	dh_gencontrol -p$@
@@ -188,6 +189,10 @@ apt: build-binary build-manpages debian/apt.install
 	cp debian/apt.conf.autoremove debian/$@/etc/apt/apt.conf.d/01autoremove
 	cp debian/apt.auto-removal.sh debian/$@/etc/kernel/postinst.d/apt-auto-removal
 	chmod 755 debian/$@/etc/kernel/postinst.d/apt-auto-removal
+	# install bash completion
+	cp share/bash-completions/* debian/$@/usr/share/bash-completion/completions/
+	# install vendor specific apt confs
+	find -L vendor/current -name 'apt.conf-*' | while read conf; do cp "$${conf}" "debian/$@/etc/apt/apt.conf.d/$${conf#*-}"; done
 
 	# make rosetta happy and remove pot files in po/ (but leave stuff
 	# in po/domains/* untouched) and cp *.po into each domain dir
@@ -206,6 +211,9 @@ apt: build-binary build-manpages debian/apt.install
 	#mv debian/$@/usr/bin/apt-report-mirror-failure \
 	#   debian/$@/usr/lib/apt/apt-report-mirror-failure \
 
+	# move the apt-helper in place
+	mv debian/$@/usr/bin/apt-helper debian/$@/usr/lib/apt/apt-helper 
+
 	dh_bugfiles -p$@
 	dh_lintian -p$@
 	dh_installexamples -p$@ $(BLD)/docs/examples/*
@@ -217,6 +225,7 @@ apt: build-binary build-manpages debian/apt.install
 	dh_strip -p$@
 	dh_compress -p$@
 	dh_fixperms -p$@
+	dh_makeshlibs -p$@
 	dh_installdeb -p$@
 	dh_shlibdeps -p$@
 	dh_gencontrol -p$@ -- -Vapt:keyring="$(shell ./vendor/getinfo keyring-package)"

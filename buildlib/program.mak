@@ -6,7 +6,7 @@
 # $(SOURCE) - The source code to use
 # $(PROGRAM) - The name of the program
 # $(SLIBS) - Shared libs to link against
-# $(LIB_MAKES) - Shared libary make files to depend on - to ensure we get
+# $(LIB_MAKES) - Shared library make files to depend on - to ensure we get
 # remade when the shared library version increases.
 
 # See defaults.mak for information about LOCAL
@@ -50,7 +50,7 @@ $($(LOCAL)-BIN): $($(LOCAL)-OBJS) $($(LOCAL)-MKS)
 vpath %.cc $(SUBDIRS)
 $(OBJ)/%.o: %.cc
 	echo Compiling $< to $@
-	$(CXX) -c $(INLINEDEPFLAG) $(CPPFLAGS) $(CXXFLAGS) -o $@ $<
+	$(CXX) -c $(INLINEDEPFLAG) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(abspath $<)
 	$(DoDep)
 
 # Include the dependencies that are available

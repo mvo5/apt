@@ -1,9 +1,18 @@
+#include <config.h>
+
 #include <apt-pkg/cachefile.h>
 #include <apt-pkg/pkgcache.h>
 #include <apt-pkg/depcache.h>
-#include <apt-pkg/strutl.h>
+#include <apt-pkg/cacheiterators.h>
+#include <apt-pkg/configuration.h>
+#include <apt-pkg/progress.h>
+#include <apt-pkg/policy.h>
 
-#include "private-cacheset.h"
+#include <apt-private/private-cacheset.h>
+
+#include <stddef.h>
+
+#include <apti18n.h>
 
 bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile, 
                                  LocalitySortedVersionSet &output_set,
@@ -52,10 +61,25 @@ bool GetLocalitySortedVersionSet(pkgCacheFile &CacheFile,
              output_set.insert(policy->GetCandidateVer(P));
          }
       }
+      else if (_config->FindB("APT::Cmd::Manual-Installed") == true)
+      {
+         if (P.CurrentVer() && 
+             ((*DepCache)[P].Flags & pkgCache::Flag::Auto) == false)
+         {
+             pkgPolicy *policy = CacheFile.GetPolicy();
+             output_set.insert(policy->GetCandidateVer(P));
+         }
+      }
       else 
       {
          pkgPolicy *policy = CacheFile.GetPolicy();
-         output_set.insert(policy->GetCandidateVer(P));
+         if (policy->GetCandidateVer(P).IsGood())
+            output_set.insert(policy->GetCandidateVer(P));
+         else 
+            // no candidate, this may happen for packages in 
+            // dpkg "deinstall ok config-file" state - we pick the first ver
+            // (which should be the only one)
+            output_set.insert(P.VersionList());
       }
    }
    progress.Done();
