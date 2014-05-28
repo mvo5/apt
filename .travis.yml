@@ -3,4 +3,11 @@ before_install:
  - sudo apt-get update -q
  - sudo ./prepare-release travis-ci
  - sudo apt-get install -q --no-install-recommends stunnel4
-script: make && make test && test/integration/run-tests
+script: make &&
+ make test &&
+ test/integration/run-tests &&
+ rm -rf build &&
+ export CXX="clang++ -O0 -g -fsanitize=address -fno-omit-frame-pointer" &&
+ export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-3.4 &&
+ make &&
+ test/integration/run-tests
