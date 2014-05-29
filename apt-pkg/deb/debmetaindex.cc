@@ -246,6 +246,25 @@ vector <IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
 		}
 	}
 
+        // get the Contents-* files
+        if (_config->FindB("Apt::Acquire::Contents", false) == true)
+        {
+           for (map<string, vector<debSectionEntry const*> >::const_iterator a = ArchEntries.begin();
+                a != ArchEntries.end();
+                ++a)
+           {
+              if (a->first == "source")
+                 continue;
+              IndexTarget * Target = new OptionalIndexTarget();
+              std::string ContentsFile = "Contents-" + a->first;
+              Target->ShortDesc = ContentsFile;
+              Target->MetaKey = ContentsFile;
+              Target->URI = MetaIndexURI(ContentsFile.c_str());
+              Target->Description = MetaIndexInfo(ContentsFile.c_str());
+              IndexTargets->push_back(Target);
+           }
+        }
+
 	return IndexTargets;
 }
 									/*}}}*/
