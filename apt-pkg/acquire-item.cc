@@ -997,27 +997,32 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc, string const &S
    DestFile = _config->FindDir("Dir::State::lists") + "partial/";
    DestFile += URItoFileName(URI);
 
-   std::string const comprExt = CompressionExtension.substr(0, CompressionExtension.find(' '));
-   std::string MetaKey;
-   if (comprExt == "uncompressed")
-   {
-      Desc.URI = URI;
-      if(Target)
-         MetaKey = string(Target->MetaKey);
-   }
-   else
-   {
-      Desc.URI = URI + '.' + comprExt;
-      if(Target)
-         MetaKey = string(Target->MetaKey) + '.' + comprExt;
-   }
-
-   // load the filesize
+   // find out compression extension is available and use it
    if(MetaIndexParser)
    {
-      indexRecords::checkSum *Record = MetaIndexParser->Lookup(MetaKey);
-      if(Record)
-         FileSize = Record->Size;
+      std::vector<std::string> const ext = StringSplit(CompressionExtension, " ");
+      for(std::vector<std::string>::const_iterator I = ext.begin();
+          I != ext.end(); ++I)
+      {
+         std::string MetaKey;
+         std::string MaybeURI;
+         if (*I == "uncompressed")
+         {
+            MetaKey = string(Target->MetaKey);
+            MaybeURI = URI;
+         } else {
+            MetaKey = string(Target->MetaKey) + "." + *I;
+            MaybeURI = URI + '.' + *I;
+         }
+      
+         indexRecords::checkSum *Record = MetaIndexParser->Lookup(MetaKey);
+         if(Record)
+         {
+            FileSize = Record->Size;
+            Desc.URI = MaybeURI;
+            break;
+         }
+      }
    }
 
    Desc.Description = URIDesc;
