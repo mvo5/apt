@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture "i386"
+
+buildsimplenativepackage 'foo' 'all' '1.0'
+
+APTARCHIVE=$(readlink -f ./aptarchive)
+
+setupaptarchive
+
+# ensure that redirects work and do not hang apt
+aptget install -qq foo > apt.output < /dev/null
+
+# ensure we see one expected line in both the redirected output and
+# also in the term.log - we do not compare the full output as dpkg
+# output changed between travis-ci.org (where our tests are run) 
+# and current sid
+testequal 'Setting up foo (1.0) ...' grep 'Setting.up' apt.output
+
+# ensure the terminal capture works even with redirected stdout/stdin
+testequal 'Setting up foo (1.0) ...' grep 'Setting.up' rootdir/var/log/apt/term.log
+

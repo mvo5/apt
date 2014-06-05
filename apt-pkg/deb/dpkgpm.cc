@@ -58,16 +58,16 @@ using namespace std;
 class pkgDPkgPMPrivate 
 {
 public:
-   pkgDPkgPMPrivate() : stdin_is_dev_null(false), dpkgbuf_pos(0),
+   pkgDPkgPMPrivate() : dpkgbuf_pos(0),
 			term_out(NULL), history_out(NULL), 
-                        progress(NULL), master(-1), slave(-1)
+                        progress(NULL), master(-1), slave(-1),
+                        real_pty(-1)
    {
       dpkgbuf[0] = '\0';
    }
    ~pkgDPkgPMPrivate()
    {
    }
-   bool stdin_is_dev_null;
    // the buffer we use for the dpkg status-fd reading
    char dpkgbuf[1024];
    int dpkgbuf_pos;
@@ -80,6 +80,7 @@ public:
    struct	termios tt;
    int master;
    int slave;
+   int real_pty;
 
    // signals
    sigset_t sigmask;
@@ -517,11 +518,9 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
 void pkgDPkgPM::DoStdin(int master)
 {
    unsigned char input_buf[256] = {0,}; 
-   ssize_t len = read(0, input_buf, sizeof(input_buf));
+   ssize_t len = read(d->real_pty, input_buf, sizeof(input_buf));
    if (len)
       FileFd::Write(master, input_buf, len);
-   else
-      d->stdin_is_dev_null = true;
 }
 									/*}}}*/
 // DPkgPM::DoTerminalPty - Read the terminal pty and write log		/*{{{*/
@@ -533,7 +532,7 @@ void pkgDPkgPM::DoTerminalPty(int master)
 {
    unsigned char term_buf[1024] = {0,0, };
 
-   ssize_t len=read(master, term_buf, sizeof(term_buf));
+   ssize_t len = read(master, term_buf, sizeof(term_buf));
    if(len == -1 && errno == EIO)
    {
       // this happens when the child is about to exit, we
@@ -545,7 +544,8 @@ void pkgDPkgPM::DoTerminalPty(int master)
    }  
    if(len <= 0) 
       return;
-   FileFd::Write(1, term_buf, len);
+
+   FileFd::Write(STDOUT_FILENO, term_buf, len);
    if(d->term_out)
       fwrite(term_buf, len, sizeof(char), d->term_out);
 }
@@ -1052,57 +1052,79 @@ void pkgDPkgPM::StartPtyMagic()
       return;
    }
 
-   // setup the pty and stuff
-   struct winsize win;
-
-   // if tcgetattr for both stdin/stdout returns 0 (no error)
-   // we do the pty magic
-   _error->PushToStack();
-   if (tcgetattr(STDIN_FILENO, &d->tt) == 0 &&
-       tcgetattr(STDOUT_FILENO, &d->tt) == 0)
+   // get the controlling terminal pty (if available)
+   int fd = open("/dev/tty", O_RDWR);
+   if(fd >= 0)
    {
-       if (ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&win) < 0)
-       {
-           _error->Errno("ioctl", _("ioctl(TIOCGWINSZ) failed"));
-       } else if (openpty(&d->master, &d->slave, NULL, &d->tt, &win) < 0)
-       {
-           _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
-           d->master = d->slave = -1;
-        } else {
-	    struct termios rtt;
-	    rtt = d->tt;
-	    cfmakeraw(&rtt);
-	    rtt.c_lflag &= ~ECHO;
-	    rtt.c_lflag |= ISIG;
-	    // block SIGTTOU during tcsetattr to prevent a hang if
-	    // the process is a member of the background process group
-	    // http://www.opengroup.org/onlinepubs/000095399/functions/tcsetattr.html
-	    sigemptyset(&d->sigmask);
-	    sigaddset(&d->sigmask, SIGTTOU);
-	    sigprocmask(SIG_BLOCK,&d->sigmask, &d->original_sigmask);
-	    tcsetattr(0, TCSAFLUSH, &rtt);
-	    sigprocmask(SIG_SETMASK, &d->original_sigmask, 0);
-        }
+      if(isatty(fd) == 1)
+      {
+         d->real_pty = fd;
+         fcntl(d->real_pty, F_SETFL,O_NONBLOCK);
       }
-   // complain only if stdout is either a terminal (but still failed) or is an invalid
-      // descriptor otherwise we would complain about redirection to e.g. /dev/null as well.
-      else if (isatty(STDOUT_FILENO) == 1 || errno == EBADF)
-         _error->Errno("tcgetattr", _("Can not write log (%s)"), _("Is stdout a terminal?"));
+      else 
+      {
+         close(fd);
+      }
+   }
 
-      if (_error->PendingError() == true)
-	 _error->DumpErrors(std::cerr);
-      _error->RevertToStack();
+   // if we can't get the attr of stdout, use generic ones
+   if (d->real_pty < 0 || tcgetattr(d->real_pty, &d->tt) < 0)
+   {
+      memset(&d->tt, 0, sizeof(d->tt));
+      d->tt.c_iflag |= IGNBRK;
+   }
+
+   // if we can't get the winsize, use generic one
+   struct winsize win;
+   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *)&win) < 0)
+   {
+      win.ws_col = 80;
+      win.ws_row = 25;
+   }
+
+   // our pty should not map CR to NL on ouput
+   struct termios rtt;
+   rtt.c_oflag &= ~(OCRNL);
+
+
+   // open a new pty to run dpkg in
+   if (openpty(&d->master, &d->slave, NULL, &rtt, &win) < 0)
+   {
+      _error->Errno("openpty", _("Can not write log (%s)"), _("Is /dev/pts mounted?"));
+      d->master = d->slave = -1;
+      return;
+   } 
+
+   // setup real pty so that we can write to it
+   if(d->real_pty >= 0)
+   {
+      rtt = d->tt;
+      cfmakeraw(&rtt);
+      rtt.c_lflag &= ~ECHO;
+      rtt.c_oflag |= (OPOST|ONOCR);
+
+      // block SIGTTOU during tcsetattr to prevent a hang if
+      // the process is a member of the background process group
+      // http://www.opengroup.org/onlinepubs/000095399/functions/tcsetattr.html
+      sigemptyset(&d->sigmask);
+      sigaddset(&d->sigmask, SIGTTOU);
+      sigprocmask(SIG_BLOCK,&d->sigmask, &d->original_sigmask);
+      tcsetattr(d->real_pty, TCSAFLUSH, &rtt);
+      sigprocmask(SIG_SETMASK, &d->original_sigmask, 0);
+   }
 }
 
 void pkgDPkgPM::StopPtyMagic()
 {
-   if(d->slave > 0)
+   if(d->real_pty >= 0)
+   {
+      tcsetattr(d->real_pty, TCSAFLUSH, &d->tt);
+      close(d->real_pty);
+   }
+   if(d->slave >= 0)
       close(d->slave);
    if(d->master >= 0) 
-   {
-      tcsetattr(0, TCSAFLUSH, &d->tt);
       close(d->master);
-   }
 }
 
 // DPkgPM::Go - Run the sequence					/*{{{*/
@@ -1185,8 +1207,6 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
 
    // for the progress
    BuildPackagesProgressMap();
-
-   d->stdin_is_dev_null = false;
 
    // create log
    OpenLog();
@@ -1503,8 +1523,8 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
 
 	 // wait for input or output here
 	 FD_ZERO(&rfds);
-	 if (d->master >= 0 && !d->stdin_is_dev_null)
-	    FD_SET(0, &rfds); 
+	 if (d->real_pty >= 0)
+	    FD_SET(d->real_pty, &rfds); 
 	 FD_SET(_dpkgin, &rfds);
 	 if(d->master >= 0)
 	    FD_SET(d->master, &rfds);
@@ -1528,7 +1548,7 @@ bool pkgDPkgPM::GoNoABIBreak(APT::Progress::PackageManager *progress)
 	 
 	 if(d->master >= 0 && FD_ISSET(d->master, &rfds))
 	    DoTerminalPty(d->master);
-	 if(d->master >= 0 && FD_ISSET(0, &rfds))
+	 if(d->real_pty >= 0 && FD_ISSET(d->real_pty, &rfds))
 	    DoStdin(d->master);
 	 if(FD_ISSET(_dpkgin, &rfds))
 	    DoDpkgStatusFd(_dpkgin);
