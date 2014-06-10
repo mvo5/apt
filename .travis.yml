@@ -1,4 +1,7 @@
 language: cpp
+compiler:
+ - clang
+ - gcc
 before_install:
  - sudo apt-get update -q
  - sudo ./prepare-release travis-ci
