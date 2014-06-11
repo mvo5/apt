@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+
+setupenvironment
+configarchitecture 'i386'
+
+SOURCES='rootdir/etc/apt/sources.list'
+echo "deb http://ftp.debian.org/debian stable main" > $SOURCES
+
+cat > rootdir/etc/apt/apt.conf.d/content <<'EOF'
+Apt::Acquire::Additional {
+ $(METAINDEX_BASE_URI)/Contents-$(ARCH);
+}
+EOF
+
+testequal "'http://ftp.debian.org/debian/dists/stable/main/binary-i386/Packages.bz2' ftp.debian.org_debian_dists_stable_main_binary-i386_Packages 0 :
+'http://ftp.debian.org/debian/dists/stable/main/i18n/Translation-en.bz2' ftp.debian.org_debian_dists_stable_main_i18n_Translation-en 0 :
+'http://ftp.debian.org/debian/dists/stable/Contents-i386.bz2' ftp.debian.org_debian_dists_stable_Contents-i386 0 :
+'http://ftp.debian.org/debian/dists/stable/InRelease' ftp.debian.org_debian_dists_stable_InRelease 0 " aptget update --print-uris
