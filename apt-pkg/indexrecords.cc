@@ -53,7 +53,7 @@ APT_PURE time_t indexRecords::GetValidUntil() const
    return this->ValidUntil;
 }
 
-APT_PURE const indexRecords::checkSum *indexRecords::Lookup(const string MetaKey)
+APT_PURE indexRecords::checkSum *indexRecords::Lookup(const string MetaKey)
 {
    std::map<std::string, indexRecords::checkSum* >::const_iterator sum = Entries.find(MetaKey);
    if (sum == Entries.end())
@@ -105,7 +105,7 @@ bool indexRecords::Load(const string Filename)				/*{{{*/
 	    return false;
 	 indexRecords::checkSum *Sum = new indexRecords::checkSum;
 	 Sum->MetaKeyFilename = Name;
-	 Sum->Hash = HashString(HashString::SupportedHashes()[i],Hash);
+	 Sum->Hashes.push_back(HashString(HashString::SupportedHashes()[i],Hash));
 	 Sum->Size = Size;
 	 Entries[Name] = Sum;
       }

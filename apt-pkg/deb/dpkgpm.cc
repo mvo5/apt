@@ -517,7 +517,7 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
 void pkgDPkgPM::DoStdin(int master)
 {
    unsigned char input_buf[256] = {0,}; 
-   ssize_t len = read(0, input_buf, sizeof(input_buf));
+   ssize_t len = read(STDIN_FILENO, input_buf, sizeof(input_buf));
    if (len)
       FileFd::Write(master, input_buf, len);
    else

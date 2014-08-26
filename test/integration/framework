@@ -102,10 +102,10 @@ runapt() {
 	local CMD="$1"
 	shift
 	case $CMD in
-	sh|aptitude|*/*) ;;
+	sh|aptitude|*/*|command) ;;
 	*) CMD="${BUILDDIRECTORY}/$CMD";;
 	esac
-	MALLOC_PERTURB_=21 MALLOC_CHECK_=2 APT_CONFIG="$(getaptconfig)" LD_LIBRARY_PATH=${BUILDDIRECTORY} $CMD "$@"
+	MALLOC_PERTURB_=21 MALLOC_CHECK_=2 APT_CONFIG="$(getaptconfig)" LD_LIBRARY_PATH=${LIBRARYPATH} $CMD "$@"
 }
 aptconfig() { runapt apt-config "$@"; }
 aptcache() { runapt apt-cache "$@"; }
@@ -128,11 +128,9 @@ dpkgcheckbuilddeps() {
 	command dpkg-checkbuilddeps --admindir=${TMPWORKINGDIRECTORY}/rootdir/var/lib/dpkg "$@"
 }
 gdb() {
-	echo "gdb: run »$*«"
-	CMD="$1"
+	local CMD="$1"
 	shift
-
-	APT_CONFIG=aptconfig.conf LD_LIBRARY_PATH=${LIBRARYPATH} command gdb ${BUILDDIRECTORY}/$CMD --args ${BUILDDIRECTORY}/$CMD "$@"
+	runapt command gdb --quiet -ex run "${BUILDDIRECTORY}/$CMD" --args "${BUILDDIRECTORY}/$CMD" "$@"
 }
 gpg() {
 	# see apt-key for the whole trickery. Setup is done in setupenvironment
@@ -233,6 +231,7 @@ setupenvironment() {
 	fi
 	echo "DPKG::options:: \"--log=${TMPWORKINGDIRECTORY}/rootdir/var/log/dpkg.log\";" >> aptconfig.conf
 	echo 'quiet::NoUpdate "true";' >> aptconfig.conf
+	echo 'quiet::NoStatistic "true";' >> aptconfig.conf
 	echo "Acquire::https::CaInfo \"${TESTDIR}/apt.pem\";" > rootdir/etc/apt/apt.conf.d/99https
         echo "Apt::Cmd::Disable-Script-Warning \"1\";" > rootdir/etc/apt/apt.conf.d/apt-binary
 	configcompression '.' 'gz' #'bz2' 'lzma' 'xz'
@@ -251,7 +250,8 @@ setupenvironment() {
 	gpg --quiet --check-trustdb --secret-keyring $SECRETKEYRING --keyring $SECRETKEYRING >/dev/null 2>&1
 
 	# cleanup the environment a bit
-	export PATH="${PATH}:/usr/local/sbin:/usr/sbin:/sbin"
+        # prefer our apt binaries over the system apt binaries
+	export PATH="${BUILDDIRECTORY}:${PATH}:/usr/local/sbin:/usr/sbin:/sbin"
 	export LC_ALL=C.UTF-8
 	unset LANGUAGE APT_CONFIG
 	unset GREP_OPTIONS DEB_BUILD_PROFILES

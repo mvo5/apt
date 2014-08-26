@@ -186,8 +186,8 @@ debReleaseIndex::~debReleaseIndex() {
 			delete *S;
 }
 
-vector <struct IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
-	vector <struct IndexTarget *>* IndexTargets = new vector <IndexTarget *>;
+vector <IndexTarget *>* debReleaseIndex::ComputeIndexTargets() const {
+	vector <IndexTarget *>* IndexTargets = new vector <IndexTarget *>;
 
 	map<string, vector<debSectionEntry const*> >::const_iterator const src = ArchEntries.find("source");
 	if (src != ArchEntries.end()) {
@@ -255,10 +255,10 @@ bool debReleaseIndex::GetIndexes(pkgAcquire *Owner, bool const &GetAll) const
 
    // special case for --print-uris
    if (GetAll) {
-      vector <struct IndexTarget *> *targets = ComputeIndexTargets();
-      for (vector <struct IndexTarget*>::const_iterator Target = targets->begin(); Target != targets->end(); ++Target) {
+      vector <IndexTarget *> *targets = ComputeIndexTargets();
+      for (vector <IndexTarget*>::const_iterator Target = targets->begin(); Target != targets->end(); ++Target) {
 	 new pkgAcqIndex(Owner, (*Target)->URI, (*Target)->Description,
-			 (*Target)->ShortDesc, HashString());
+			 (*Target)->ShortDesc, HashStringList());
       }
       delete targets;
 
@@ -471,6 +471,15 @@ class debSLTypeDebian : public pkgSourceList::Type
    }
 };
 
+debDebFileMetaIndex::debDebFileMetaIndex(std::string const &DebFile)
+   : metaIndex(DebFile, "local-uri", "deb-dist"), DebFile(DebFile)
+{
+   DebIndex = new debDebPkgFileIndex(DebFile);
+   Indexes = new vector<pkgIndexFile *>();
+   Indexes->push_back(DebIndex);
+}
+
+
 class debSLTypeDeb : public debSLTypeDebian
 {
    public:
@@ -507,5 +516,25 @@ class debSLTypeDebSrc : public debSLTypeDebian
    }   
 };
 
+class debSLTypeDebFile : public pkgSourceList::Type
+{
+   public:
+
+   bool CreateItem(vector<metaIndex *> &List, string const &URI,
+		   string const &/*Dist*/, string const &/*Section*/,
+		   std::map<string, string> const &/*Options*/) const
+   {
+      metaIndex *mi = new debDebFileMetaIndex(URI);
+      List.push_back(mi);
+      return true;
+   }
+   
+   debSLTypeDebFile()
+   {
+      Name = "deb-file";
+      Label = "Debian Deb File";
+   }   
+};
 debSLTypeDeb _apt_DebType;
 debSLTypeDebSrc _apt_DebSrcType;
+debSLTypeDebFile _apt_DebFileType;

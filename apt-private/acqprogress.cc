@@ -64,8 +64,6 @@ void AcqTextStatus::IMSHit(pkgAcquire::ItemDesc &Itm)
       cout << '\r' << BlankLine << '\r';
 
    cout << _("Hit ") << Itm.Description;
-   if (Itm.Owner->FileSize != 0)
-      cout << " [" << SizeToStr(Itm.Owner->FileSize) << "B]";
    cout << endl;
    Update = true;
 }
@@ -142,6 +140,9 @@ void AcqTextStatus::Stop()
    if (Quiet <= 0)
       cout << '\r' << BlankLine << '\r' << flush;
 
+   if (_config->FindB("quiet::NoStatistic", false) == true)
+      return;
+
    if (FetchedBytes != 0 && _error->PendingError() == false)
       ioprintf(cout,_("Fetched %sB in %s (%sB/s)\n"),
 	       SizeToStr(FetchedBytes).c_str(),
@@ -170,7 +171,7 @@ bool AcqTextStatus::Pulse(pkgAcquire *Owner)
       ScreenWidth = sizeof(Buffer)-1;
 
    // Put in the percent done
-   sprintf(S,"%.0f%%",((CurrentBytes + CurrentItems)*100.0)/(TotalBytes+TotalItems));
+   sprintf(S,"%.0f%%", Percent);
 
    bool Shown = false;
    for (pkgAcquire::Worker *I = Owner->WorkersBegin(); I != 0;

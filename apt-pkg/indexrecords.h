@@ -41,7 +41,7 @@ class indexRecords
    indexRecords(const std::string ExpectedDist);
 
    // Lookup function
-   virtual const checkSum *Lookup(const std::string MetaKey);
+   virtual checkSum *Lookup(const std::string MetaKey);
    /** \brief tests if a checksum for this file is available */
    bool Exists(std::string const &MetaKey) const;
    std::vector<std::string> MetaKeys();
@@ -55,11 +55,21 @@ class indexRecords
    virtual ~indexRecords(){};
 };
 
+#if __GNUC__ >= 4
+	// ensure that con- & de-structor don't trigger this warning
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 struct indexRecords::checkSum
 {
    std::string MetaKeyFilename;
-   HashString Hash;
+   HashStringList Hashes;
    unsigned long long Size;
+
+   APT_DEPRECATED HashString Hash;
 };
+#if __GNUC__ >= 4
+	#pragma GCC diagnostic pop
+#endif
 
 #endif

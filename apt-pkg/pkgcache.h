@@ -138,7 +138,7 @@ class pkgCache								/*{{{*/
       /** \brief priority of a package version
 
           Zero is used for unparsable or absent Priority fields. */
-      enum VerPriority {Important=1,Required=2,Standard=3,Optional=4,Extra=5};
+      enum VerPriority {Required=1,Important=2,Standard=3,Optional=4,Extra=5};
       enum PkgSelectedState {Unknown=0,Install=1,Hold=2,DeInstall=3,Purge=4};
       enum PkgInstState {Ok=0,ReInstReq=1,HoldInst=2,HoldReInstReq=3};
       enum PkgCurrentState {NotInstalled=0,UnPacked=1,HalfConfigured=2,
@@ -286,8 +286,10 @@ struct pkgCache::Header
    map_ptrloc StringList;
    /** \brief String representing the version system used */
    map_ptrloc VerSysName;
-   /** \brief Architecture(s) the cache was built against */
+   /** \brief native architecture the cache was built against */
    map_ptrloc Architecture;
+   /** \brief all architectures the cache was built against */
+   map_ptrloc Architectures;
    /** \brief The maximum size of a raw entry from the original Package file */
    unsigned long MaxVerFileSize;
    /** \brief The maximum size of a raw entry from the original Translation file */

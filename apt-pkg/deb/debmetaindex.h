@@ -18,6 +18,8 @@
 
 class pkgAcquire;
 class pkgIndexFile;
+class debDebPkgFileIndex;
+class IndexTarget;
 
 class debReleaseIndex : public metaIndex {
    public:
@@ -44,7 +46,7 @@ class debReleaseIndex : public metaIndex {
 
    virtual std::string ArchiveURI(std::string const &File) const {return URI + File;};
    virtual bool GetIndexes(pkgAcquire *Owner, bool const &GetAll=false) const;
-   std::vector <struct IndexTarget *>* ComputeIndexTargets() const;
+   std::vector <IndexTarget *>* ComputeIndexTargets() const;
    std::string Info(const char *Type, std::string const &Section, std::string const &Arch="") const;
 
    std::string MetaIndexInfo(const char *Type) const;
@@ -69,6 +71,29 @@ class debReleaseIndex : public metaIndex {
    void PushSectionEntry(std::vector<std::string> const &Archs, const debSectionEntry *Entry);
    void PushSectionEntry(std::string const &Arch, const debSectionEntry *Entry);
    void PushSectionEntry(const debSectionEntry *Entry);
+};
+
+class debDebFileMetaIndex : public metaIndex
+{
+ private:
+   std::string DebFile;
+   debDebPkgFileIndex *DebIndex;
+ public:
+   virtual std::string ArchiveURI(std::string const& /*File*/) const {
+      return DebFile;
+   }
+   virtual bool GetIndexes(pkgAcquire* /*Owner*/, const bool& /*GetAll=false*/) const {
+      return true;
+   }
+   virtual std::vector<pkgIndexFile *> *GetIndexFiles() {
+      return Indexes;
+   }
+   virtual bool IsTrusted() const {
+      return true;
+   }
+   debDebFileMetaIndex(std::string const &DebFile);
+   virtual ~debDebFileMetaIndex() {};
+
 };
 
 #endif

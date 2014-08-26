@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <iomanip>
 
 #include <dirent.h>
 #include <sys/time.h>
@@ -821,7 +822,9 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
    // Compute the total number of bytes to fetch
    unsigned int Unknown = 0;
    unsigned int Count = 0;
-   for (pkgAcquire::ItemCIterator I = Owner->ItemsBegin(); I != Owner->ItemsEnd();
+   bool UnfetchedReleaseFiles = false;
+   for (pkgAcquire::ItemCIterator I = Owner->ItemsBegin(); 
+        I != Owner->ItemsEnd();
 	++I, ++Count)
    {
       TotalItems++;
@@ -831,6 +834,13 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
       // Totally ignore local items
       if ((*I)->Local == true)
 	 continue;
+
+      // see if the method tells us to expect more
+      TotalItems += (*I)->ExpectedAdditionalItems;
+
+      // check if there are unfetched Release files
+      if ((*I)->Complete == false && (*I)->ExpectedAdditionalItems > 0)
+         UnfetchedReleaseFiles = true;
 
       TotalBytes += (*I)->FileSize;
       if ((*I)->Complete == true)
@@ -843,6 +853,7 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
    unsigned long long ResumeSize = 0;
    for (pkgAcquire::Worker *I = Owner->WorkersBegin(); I != 0;
 	I = Owner->WorkerStep(I))
+   {
       if (I->CurrentItem != 0 && I->CurrentItem->Owner->Complete == false)
       {
 	 CurrentBytes += I->CurrentSize;
@@ -853,6 +864,7 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
 	     I->CurrentItem->Owner->Complete == false)
 	    TotalBytes += I->CurrentSize;
       }
+   }
    
    // Normalize the figures and account for unknown size downloads
    if (TotalBytes <= 0)
@@ -863,6 +875,12 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
    // Wha?! Is not supposed to happen.
    if (CurrentBytes > TotalBytes)
       CurrentBytes = TotalBytes;
+
+   // debug
+   if (_config->FindB("Debug::acquire::progress", false) == true)
+      std::clog << " Bytes: " 
+                << SizeToStr(CurrentBytes) << " / " << SizeToStr(TotalBytes) 
+                << std::endl;
    
    // Compute the CPS
    struct timeval NewTime;
@@ -883,6 +901,14 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
       Time = NewTime;
    }
 
+   // calculate the percentage, if we have too little data assume 1%
+   if (TotalBytes > 0 && UnfetchedReleaseFiles)
+      Percent = 0;
+   else 
+      // use both files and bytes because bytes can be unreliable
+      Percent = (0.8 * (CurrentBytes/float(TotalBytes)*100.0) + 
+                 0.2 * (CurrentItems/float(TotalItems)*100.0));
+
    int fd = _config->FindI("APT::Status-Fd",-1);
    if(fd > 0) 
    {
@@ -900,13 +926,11 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
       else
 	 snprintf(msg,sizeof(msg), _("Retrieving file %li of %li"), i, TotalItems);
 	 
-
-
       // build the status str
       status << "dlstatus:" << i
-	     << ":"  << (CurrentBytes/float(TotalBytes)*100.0) 
-	     << ":" << msg 
-	     << endl;
+             << ":"  << std::setprecision(3) << Percent
+             << ":" << msg 
+             << endl;
 
       std::string const dlstatus = status.str();
       FileFd::Write(fd, dlstatus.c_str(), dlstatus.size());

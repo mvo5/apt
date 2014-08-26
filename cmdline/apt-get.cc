@@ -832,23 +832,25 @@ static bool DoSource(CommandLine &CmdL)
 	 queued.insert(Last->Index().ArchiveURI(I->Path));
 
 	 // check if we have a file with that md5 sum already localy
-	 if(!I->MD5Hash.empty() && FileExists(flNotDir(I->Path)))  
-	 {
-	    FileFd Fd(flNotDir(I->Path), FileFd::ReadOnly);
-	    MD5Summation sum;
-	    sum.AddFD(Fd.Fd(), Fd.Size());
-	    Fd.Close();
-	    if((string)sum.Result() == I->MD5Hash) 
+	 std::string localFile = flNotDir(I->Path);
+	 if (FileExists(localFile) == true)
+	    if(I->Hashes.VerifyFile(localFile) == true)
 	    {
 	       ioprintf(c1out,_("Skipping already downloaded file '%s'\n"),
-			flNotDir(I->Path).c_str());
+			localFile.c_str());
 	       continue;
 	    }
+
+	 // see if we have a hash (Acquire::ForceHash is the only way to have none)
+	 if (I->Hashes.usable() == false && _config->FindB("APT::Get::AllowUnauthenticated",false) == false)
+	 {
+	    ioprintf(c1out, "Skipping download of file '%s' as requested hashsum is not available for authentication\n",
+		     localFile.c_str());
+	    continue;
 	 }
 
 	 new pkgAcqFile(&Fetcher,Last->Index().ArchiveURI(I->Path),
-			I->MD5Hash,I->Size,
-			Last->Index().SourceInfo(*Last,*I),Src);
+			I->Hashes, I->Size, Last->Index().SourceInfo(*Last,*I), Src);
       }
    }
 
@@ -1061,7 +1063,30 @@ static bool DoBuildDep(CommandLine &CmdL)
    for (const char **I = CmdL.FileList + 1; *I != 0; I++, J++)
    {
       string Src;
-      pkgSrcRecords::Parser *Last = FindSrc(*I,Recs,SrcRecs,Src,Cache);
+      pkgSrcRecords::Parser *Last = 0;
+
+      // a unpacked debian source tree
+      if (DirectoryExists(*I))
+      {
+         // FIXME: how can we make this more elegant?
+         std::string TypeName = "debian/control File Source Index";
+         pkgIndexFile::Type *Type = pkgIndexFile::Type::GetType(TypeName.c_str());
+         if(Type != NULL)
+            Last = Type->CreateSrcPkgParser(*I);
+      }
+      // if its a local file (e.g. .dsc) use this
+      else if (FileExists(*I))
+      {
+         // see if we can get a parser for this pkgIndexFile type
+         string TypeName = flExtension(*I) + " File Source Index";
+         pkgIndexFile::Type *Type = pkgIndexFile::Type::GetType(TypeName.c_str());
+         if(Type != NULL)
+            Last = Type->CreateSrcPkgParser(*I);
+      } else {
+         // normal case, search the cache for the source file
+         Last = FindSrc(*I,Recs,SrcRecs,Src,Cache);
+      }
+
       if (Last == 0)
 	 return _error->Error(_("Unable to find a source package for %s"),Src.c_str());
             
@@ -1079,7 +1104,7 @@ static bool DoBuildDep(CommandLine &CmdL)
       }
       else if (Last->BuildDepends(BuildDeps, _config->FindB("APT::Get::Arch-Only", false), StripMultiArch) == false)
 	    return _error->Error(_("Unable to get build-dependency information for %s"),Src.c_str());
-   
+
       // Also ensure that build-essential packages are present
       Configuration::Item const *Opts = _config->Tree("APT::Build-Essential");
       if (Opts) 

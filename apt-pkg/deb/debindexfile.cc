@@ -30,6 +30,7 @@
 #include <apt-pkg/pkgcachegen.h>
 #include <apt-pkg/pkgrecords.h>
 #include <apt-pkg/srcrecords.h>
+#include <apt-pkg/sptr.h>
 
 #include <stdio.h>
 #include <iostream>
@@ -667,6 +668,133 @@ APT_CONST bool debStatusIndex::Exists() const
 }
 									/*}}}*/
 
+// debDebPkgFile - Single .deb file                           		/*{{{*/
+// ---------------------------------------------------------------------
+debDebPkgFileIndex::debDebPkgFileIndex(std::string DebFile)
+   : pkgIndexFile(true), DebFile(DebFile)
+{
+   DebFileFullPath = flAbsPath(DebFile);
+}
+
+std::string debDebPkgFileIndex::ArchiveURI(std::string /*File*/) const
+{
+   return "file:" + DebFileFullPath;
+}
+
+bool debDebPkgFileIndex::Exists() const
+{
+   return FileExists(DebFile);
+}
+bool debDebPkgFileIndex::Merge(pkgCacheGenerator& Gen, OpProgress* Prog) const
+{
+   if(Prog)
+      Prog->SubProgress(0, "Reading deb file");
+
+   // get the control data out of the deb file vid dpkg -I
+   // ... can I haz libdpkg?
+   std::string dpkg = _config->Find("Dir::Bin::dpkg","dpkg");
+   const char *Args[5] = {dpkg.c_str(),
+                          "-I",
+                          DebFile.c_str(),
+                          "control",
+                          NULL};
+   FileFd PipeFd;
+   pid_t Child;
+   if(Popen(Args, PipeFd, Child, FileFd::ReadOnly) == false)
+      return _error->Error("Popen failed");
+   // FIXME: static buffer
+   char buf[8*1024];
+   unsigned long long n = 0;
+   if(PipeFd.Read(buf, sizeof(buf)-1, &n) == false)
+      return _error->Errno("read", "Failed to read dpkg pipe");
+   ExecWait(Child, "Popen");
+
+   // now write the control data to a tempfile
+   SPtr<FileFd> DebControl = GetTempFile("deb-file-" + DebFile);
+   if(DebControl == NULL)
+      return false;
+   DebControl->Write(buf, n);
+   // append size of the file
+   FileFd Fd(DebFile, FileFd::ReadOnly);
+   string Size;
+   strprintf(Size, "Size: %llu\n", Fd.Size());
+   DebControl->Write(Size.c_str(), Size.size());
+   // and rewind for the listparser
+   DebControl->Seek(0);
+
+   // and give it to the list parser
+   debDebFileParser Parser(DebControl, DebFile);
+   if(Gen.SelectFile(DebFile, "local", *this) == false)
+      return _error->Error("Problem with SelectFile %s", DebFile.c_str());
+
+   pkgCache::PkgFileIterator File = Gen.GetCurFile();
+   File->Size = DebControl->Size();
+   File->mtime = DebControl->ModificationTime();
+   
+   if (Gen.MergeList(Parser) == false)
+      return _error->Error("Problem with MergeLister for %s", DebFile.c_str());
+
+   return true;
+}
+pkgCache::PkgFileIterator debDebPkgFileIndex::FindInCache(pkgCache &Cache) const
+{
+   // FIXME: we could simply always return pkgCache::PkgFileIterator(Cache);
+   //        to indicate its never in the cache which will force a Merge()
+   pkgCache::PkgFileIterator File = Cache.FileBegin();
+   for (; File.end() == false; ++File)
+   {
+       if (File.FileName() == NULL || DebFile != File.FileName())
+	 continue;
+
+       return File;
+   }
+   
+   return File;
+}
+unsigned long debDebPkgFileIndex::Size() const
+{
+   struct stat buf;
+   if(stat(DebFile.c_str(), &buf) != 0)
+      return 0;
+   return buf.st_size;
+}
+									/*}}}*/
+
+// debDscFileIndex stuff
+debDscFileIndex::debDscFileIndex(std::string &DscFile) 
+   : pkgIndexFile(true), DscFile(DscFile)
+{
+}
+
+bool debDscFileIndex::Exists() const
+{
+   return FileExists(DscFile);
+}
+
+unsigned long debDscFileIndex::Size() const
+{
+   struct stat buf;
+   if(stat(DscFile.c_str(), &buf) == 0)
+      return buf.st_size;
+   return 0;
+}
+
+// DscFileIndex::CreateSrcParser - Get a parser for the .dsc file	/*{{{*/
+// ---------------------------------------------------------------------
+/* */
+pkgSrcRecords::Parser *debDscFileIndex::CreateSrcParser() const
+{
+   if (!FileExists(DscFile))
+      return NULL;
+
+   return new debDscRecordParser(DscFile,this);
+}
+									/*}}}*/
+
+
+
+
+// ---------------------------------------------------------------------
 // Index File types for Debian						/*{{{*/
 class debIFTypeSrc : public pkgIndexFile::Type
 {
@@ -699,10 +827,42 @@ class debIFTypeStatus : public pkgIndexFile::Type
    };
    debIFTypeStatus() {Label = "Debian dpkg status file";};
 };
+class debIFTypeDebPkgFile : public pkgIndexFile::Type
+{
+   public:
+   virtual pkgRecords::Parser *CreatePkgParser(pkgCache::PkgFileIterator File) const 
+   {
+      return new debDebFileRecordParser(File.FileName(),*File.Cache());
+   };
+   debIFTypeDebPkgFile() {Label = "deb Package file";};
+};
+class debIFTypeDscFile : public pkgIndexFile::Type
+{
+   public:
+   virtual pkgSrcRecords::Parser *CreateSrcPkgParser(std::string DscFile) const
+   {
+      return new debDscRecordParser(DscFile, NULL);
+   };
+   debIFTypeDscFile() {Label = "dsc File Source Index";};
+};
+class debIFTypeDebianSourceDir : public pkgIndexFile::Type
+{
+   public:
+   virtual pkgSrcRecords::Parser *CreateSrcPkgParser(std::string SourceDir) const
+   {
+      return new debDscRecordParser(SourceDir + string("/debian/control"), NULL);
+   };
+   debIFTypeDebianSourceDir() {Label = "debian/control File Source Index";};
+};
+
 static debIFTypeSrc _apt_Src;
 static debIFTypePkg _apt_Pkg;
 static debIFTypeTrans _apt_Trans;
 static debIFTypeStatus _apt_Status;
+static debIFTypeDebPkgFile _apt_DebPkgFile;
+// file based pseudo indexes
+static debIFTypeDscFile _apt_DscFile;
+static debIFTypeDebianSourceDir _apt_DebianSourceDir;
 
 const pkgIndexFile::Type *debSourcesIndex::GetType() const
 {
@@ -720,5 +880,16 @@ const pkgIndexFile::Type *debStatusIndex::GetType() const
 {
    return &_apt_Status;
 }
-
+const pkgIndexFile::Type *debDebPkgFileIndex::GetType() const
+{
+   return &_apt_DebPkgFile;
+}
+const pkgIndexFile::Type *debDscFileIndex::GetType() const
+{
+   return &_apt_DscFile;
+}
+const pkgIndexFile::Type *debDebianSourceDirIndex::GetType() const
+{
+   return &_apt_DebianSourceDir;
+}
 									/*}}}*/

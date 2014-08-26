@@ -656,6 +656,22 @@ string flCombine(string Dir,string File)
    return Dir + '/' + File;
 }
 									/*}}}*/
+// flAbsPath - Return the absolute path of the filename			/*{{{*/
+// ---------------------------------------------------------------------
+/* */
+string flAbsPath(string File)
+{
+   char *p = realpath(File.c_str(), NULL);
+   if (p == NULL)
+   {
+      _error->Errno("realpath", "flAbsPath failed");
+      return "";
+   }
+   std::string AbsPath(p);
+   free(p);
+   return AbsPath;
+}
+									/*}}}*/
 // SetCloseExec - Set the close on exec flag				/*{{{*/
 // ---------------------------------------------------------------------
 /* */
@@ -835,6 +851,27 @@ bool ExecWait(pid_t Pid,const char *Name,bool Reap)
    return true;
 }
 									/*}}}*/
+
+
+// StartsWithGPGClearTextSignature - Check if a file is Pgp/GPG clearsigned     /*{{{*/
+// ---------------------------------------------------------------------
+/* */
+bool StartsWithGPGClearTextSignature(string const &FileName)
+{
+   static const char* SIGMSG = "-----BEGIN PGP SIGNED MESSAGE-----\n";
+   char buffer[strlen(SIGMSG)+1];
+   FILE* gpg = fopen(FileName.c_str(), "r");
+   if (gpg == NULL)
+      return false;
+
+   char const * const test = fgets(buffer, sizeof(buffer), gpg);
+   fclose(gpg);
+   if (test == NULL || strcmp(buffer, SIGMSG) != 0)
+      return false;
+
+   return true;
+}
+
 
 class FileFdPrivate {							/*{{{*/
 	public:
@@ -1913,7 +1950,6 @@ bool FileFd::Close()
    {
       if ((Flags & Compressed) != Compressed && iFd > 0 && close(iFd) != 0)
 	 Res &= _error->Errno("close",_("Problem closing the file %s"), FileName.c_str());
-
       if (d != NULL)
       {
 	 Res &= d->CloseDown(FileName);
@@ -2040,6 +2076,31 @@ std::string GetTempDir()
    return string(tmpdir);
 }
 
+FileFd* GetTempFile(std::string const &Prefix, bool ImmediateUnlink)
+{
+   char fn[512];
+   FileFd *Fd = new FileFd();
+
+   std::string tempdir = GetTempDir();
+   snprintf(fn, sizeof(fn), "%s/%s.XXXXXX", 
+            tempdir.c_str(), Prefix.c_str());
+   int fd = mkstemp(fn);
+   if(ImmediateUnlink)
+      unlink(fn);
+   if (fd < 0) 
+   {
+      _error->Errno("GetTempFile",_("Unable to mkstemp %s"), fn);
+      return NULL;
+   }
+   if (!Fd->OpenDescriptor(fd, FileFd::WriteOnly, FileFd::None, true))
+   {
+      _error->Errno("GetTempFile",_("Unable to write to %s"),fn);
+      return NULL;
+   }
+
+   return Fd;
+}
+
 bool Rename(std::string From, std::string To)
 {
    if (rename(From.c_str(),To.c_str()) != 0)
@@ -2048,5 +2109,60 @@ bool Rename(std::string From, std::string To)
                     From.c_str(),To.c_str());
       return false;
    }   
+   return true;
+}
+
+bool Popen(const char* Args[], FileFd &Fd, pid_t &Child, FileFd::OpenMode Mode)
+{
+   int fd;
+   if (Mode != FileFd::ReadOnly && Mode != FileFd::WriteOnly)
+      return _error->Error("Popen supports ReadOnly (x)or WriteOnly mode only");
+
+   int Pipe[2] = {-1, -1};
+   if(pipe(Pipe) != 0)
+   {
+      return _error->Errno("pipe", _("Failed to create subprocess IPC"));
+      return NULL;
+   }
+   std::set<int> keep_fds;
+   keep_fds.insert(Pipe[0]);
+   keep_fds.insert(Pipe[1]);
+   Child = ExecFork(keep_fds);
+   if(Child < 0)
+      return _error->Errno("fork", "Failed to fork");
+   if(Child == 0)
+   {
+      if(Mode == FileFd::ReadOnly)
+      {
+         close(Pipe[0]);
+         fd = Pipe[1];
+      }
+      else if(Mode == FileFd::WriteOnly)
+      {
+         close(Pipe[1]);
+         fd = Pipe[0];
+      }
+
+      if(Mode == FileFd::ReadOnly)
+      {
+         dup2(fd, 1);
+         dup2(fd, 2);
+      } else if(Mode == FileFd::WriteOnly)
+         dup2(fd, 0);
+
+      execv(Args[0], (char**)Args);
+      _exit(100);
+   }
+   if(Mode == FileFd::ReadOnly)
+   {
+      close(Pipe[1]);
+      fd = Pipe[0];
+   } else if(Mode == FileFd::WriteOnly)
+   {
+      close(Pipe[0]);
+      fd = Pipe[1];
+   }
+   Fd.OpenDescriptor(fd, Mode, FileFd::None, true);
+
    return true;
 }
