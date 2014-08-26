@@ -83,10 +83,10 @@ bool DoUpdate(CommandLine &CmdL)
       for (pkgCache::PkgIterator I = Cache->PkgBegin(); I.end() != true; ++I)
       {
          pkgDepCache::StateCache &state = Cache[I];
-         if (I->CurrentVer != 0 && state.Upgradable())
+         if (I->CurrentVer != 0 && state.Upgradable() && state.CandidateVer != NULL)
             upgradable++;
       }
-      const char *msg = ngettext(
+      const char *msg = P_(
          "%i package can be upgraded. Run 'apt list --upgradable' to see it.\n",
          "%i packages can be upgraded. Run 'apt list --upgradable' to see them.\n",
          upgradable);

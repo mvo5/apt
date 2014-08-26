@@ -61,7 +61,7 @@ debListParser::debListParser(FileFd *File, string const &Arch) : Tags(File),
 // ListParser::UniqFindTagWrite - Find the tag and write a unq string	/*{{{*/
 // ---------------------------------------------------------------------
 /* */
-unsigned long debListParser::UniqFindTagWrite(const char *Tag)
+map_stringitem_t debListParser::UniqFindTagWrite(const char *Tag)
 {
    const char *Start;
    const char *Stop;
@@ -108,7 +108,7 @@ unsigned char debListParser::ParseMultiArch(bool const showErrors)	/*{{{*/
 {
    unsigned char MA;
    string const MultiArch = Section.FindS("Multi-Arch");
-   if (MultiArch.empty() == true)
+   if (MultiArch.empty() == true || MultiArch == "no")
       MA = pkgCache::Version::None;
    else if (MultiArch == "same") {
       if (ArchitectureAll() == true)
@@ -145,7 +145,8 @@ unsigned char debListParser::ParseMultiArch(bool const showErrors)	/*{{{*/
 bool debListParser::NewVersion(pkgCache::VerIterator &Ver)
 {
    // Parse the section
-   Ver->Section = UniqFindTagWrite("Section");
+   unsigned long const idxSection = UniqFindTagWrite("Section");
+   Ver->Section = idxSection;
    Ver->MultiArch = ParseMultiArch(true);
    // Archive Size
    Ver->Size = Section.FindULL("Size");
@@ -255,9 +256,6 @@ MD5SumValue debListParser::Description_md5()
 bool debListParser::UsePackage(pkgCache::PkgIterator &Pkg,
 			       pkgCache::VerIterator &Ver)
 {
-   if (Pkg->Section == 0)
-      Pkg->Section = UniqFindTagWrite("Section");
-
    string const static myArch = _config->Find("APT::Architecture");
    // Possible values are: "all", "native", "installed" and "none"
    // The "installed" mode is handled by ParseStatus(), See #544481 and friends.
@@ -893,7 +891,7 @@ bool debListParser::LoadReleaseInfo(pkgCache::PkgFileIterator &FileI,
 {
    // apt-secure does no longer download individual (per-section) Release
    // file. to provide Component pinning we use the section name now
-   map_ptrloc const storage = WriteUniqString(component);
+   map_stringitem_t const storage = WriteUniqString(component);
    FileI->Component = storage;
 
    pkgTagFile TagFile(&File, File.Size());
@@ -906,7 +904,7 @@ bool debListParser::LoadReleaseInfo(pkgCache::PkgFileIterator &FileI,
    data = Section.FindS(TAG); \
    if (data.empty() == false) \
    { \
-      map_ptrloc const storage = WriteUniqString(data); \
+      map_stringitem_t const storage = WriteUniqString(data); \
       STORE = storage; \
    }
    APT_INRELEASE("Suite", FileI->Archive)

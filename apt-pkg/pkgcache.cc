@@ -54,12 +54,8 @@ pkgCache::Header::Header()
    
    /* Whenever the structures change the major version should be bumped,
       whenever the generator changes the minor version should be bumped. */
-   MajorVersion = 9;
-#if (APT_PKG_MAJOR >= 4 && APT_PKG_MINOR >= 13)
-   MinorVersion = 2;
-#else
-   MinorVersion = 1;
-#endif
+   MajorVersion = 10;
+   MinorVersion = 0;
    Dirty = false;
    
    HeaderSz = sizeof(pkgCache::Header);
@@ -89,8 +85,7 @@ pkgCache::Header::Header()
    StringList = 0;
    VerSysName = 0;
    Architecture = 0;
-   memset(PkgHashTable,0,sizeof(PkgHashTable));
-   memset(GrpHashTable,0,sizeof(GrpHashTable));
+   HashTableSize = _config->FindI("APT::Cache-HashTableSize", 10 * 1048);
    memset(Pools,0,sizeof(Pools));
 
    CacheFileSize = 0;
@@ -193,20 +188,20 @@ bool pkgCache::ReMap(bool const &Errorchecks)
 /* This is used to generate the hash entries for the HashTable. With my
    package list from bo this function gets 94% table usage on a 512 item
    table (480 used items) */
-unsigned long pkgCache::sHash(const string &Str) const
+map_id_t pkgCache::sHash(const string &Str) const
 {
    unsigned long Hash = 0;
    for (string::const_iterator I = Str.begin(); I != Str.end(); ++I)
       Hash = 41 * Hash + tolower_ascii(*I);
-   return Hash % _count(HeaderP->PkgHashTable);
+   return Hash % HeaderP->HashTableSize;
 }
 
-unsigned long pkgCache::sHash(const char *Str) const
+map_id_t pkgCache::sHash(const char *Str) const
 {
    unsigned long Hash = tolower_ascii(*Str);
    for (const char *I = Str + 1; *I != 0; ++I)
       Hash = 41 * Hash + tolower_ascii(*I);
-   return Hash % _count(HeaderP->PkgHashTable);
+   return Hash % HeaderP->HashTableSize;
 }
 									/*}}}*/
 // Cache::SingleArchFindPkg - Locate a package by name			/*{{{*/
@@ -217,8 +212,8 @@ unsigned long pkgCache::sHash(const char *Str) const
 pkgCache::PkgIterator pkgCache::SingleArchFindPkg(const string &Name)
 {
    // Look at the hash bucket
-   Package *Pkg = PkgP + HeaderP->PkgHashTable[Hash(Name)];
-   for (; Pkg != PkgP; Pkg = PkgP + Pkg->NextPackage)
+   Package *Pkg = PkgP + HeaderP->PkgHashTable()[Hash(Name)];
+   for (; Pkg != PkgP; Pkg = PkgP + Pkg->Next)
    {
       if (unlikely(Pkg->Name == 0))
 	 continue;
@@ -282,7 +277,7 @@ pkgCache::GrpIterator pkgCache::FindGrp(const string &Name) {
 		return GrpIterator(*this,0);
 
 	// Look at the hash bucket for the group
-	Group *Grp = GrpP + HeaderP->GrpHashTable[sHash(Name)];
+	Group *Grp = GrpP + HeaderP->GrpHashTable()[sHash(Name)];
 	for (; Grp != GrpP; Grp = GrpP + Grp->Next) {
 		if (unlikely(Grp->Name == 0))
 		   continue;
@@ -374,7 +369,7 @@ pkgCache::PkgIterator pkgCache::GrpIterator::FindPkg(string Arch) const {
 	   (= different packages with same calculated hash),
 	   so we need to check the name also */
 	for (pkgCache::Package *Pkg = PackageList(); Pkg != Owner->PkgP;
-	     Pkg = Owner->PkgP + Pkg->NextPackage) {
+	     Pkg = Owner->PkgP + Pkg->Next) {
 		if (S->Name == Pkg->Name &&
 		    stringcasecmp(Arch, Owner->StrP + Pkg->Arch) == 0)
 			return PkgIterator(*Owner, Pkg);
@@ -423,7 +418,7 @@ pkgCache::PkgIterator pkgCache::GrpIterator::NextPkg(pkgCache::PkgIterator const
 	if (S->LastPackage == LastPkg.Index())
 		return PkgIterator(*Owner, 0);
 
-	return PkgIterator(*Owner, Owner->PkgP + LastPkg->NextPackage);
+	return PkgIterator(*Owner, Owner->PkgP + LastPkg->Next);
 }
 									/*}}}*/
 // GrpIterator::operator ++ - Postfix incr				/*{{{*/
@@ -436,10 +431,10 @@ void pkgCache::GrpIterator::operator ++(int)
       S = Owner->GrpP + S->Next;
 
    // Follow the hash table
-   while (S == Owner->GrpP && (HashIndex+1) < (signed)_count(Owner->HeaderP->GrpHashTable))
+   while (S == Owner->GrpP && (HashIndex+1) < (signed)Owner->HeaderP->HashTableSize)
    {
       HashIndex++;
-      S = Owner->GrpP + Owner->HeaderP->GrpHashTable[HashIndex];
+      S = Owner->GrpP + Owner->HeaderP->GrpHashTable()[HashIndex];
    }
 }
 									/*}}}*/
@@ -450,13 +445,13 @@ void pkgCache::PkgIterator::operator ++(int)
 {
    // Follow the current links
    if (S != Owner->PkgP)
-      S = Owner->PkgP + S->NextPackage;
+      S = Owner->PkgP + S->Next;
 
    // Follow the hash table
-   while (S == Owner->PkgP && (HashIndex+1) < (signed)_count(Owner->HeaderP->PkgHashTable))
+   while (S == Owner->PkgP && (HashIndex+1) < (signed)Owner->HeaderP->HashTableSize)
    {
       HashIndex++;
-      S = Owner->PkgP + Owner->HeaderP->PkgHashTable[HashIndex];
+      S = Owner->PkgP + Owner->HeaderP->PkgHashTable()[HashIndex];
    }
 }
 									/*}}}*/
@@ -532,7 +527,10 @@ operator<<(std::ostream& out, pkgCache::PkgIterator Pkg)
       out << " -> " << candidate;
    if ( newest != "none" && candidate != newest)
       out << " | " << newest;
-   out << " > ( " << string(Pkg.Section()==0?"none":Pkg.Section()) << " )";
+   if (Pkg->VersionList == 0)
+      out << " > ( none )";
+   else
+      out << " > ( " << string(Pkg.VersionList().Section()==0?"unknown":Pkg.VersionList().Section()) << " )";
    return out;
 }
 									/*}}}*/
@@ -1042,5 +1040,11 @@ bool pkgCache::PrvIterator::IsMultiArchImplicit() const
    if (strcmp(Owner.Arch(), Parent.Arch()) != 0 || Owner->Name == Parent->Name)
       return true;
    return false;
+}
+									/*}}}*/
+APT_DEPRECATED APT_PURE const char * pkgCache::PkgIterator::Section() const {/*{{{*/
+   if (S->VersionList == 0)
+      return 0;
+   return VersionList().Section();
 }
 									/*}}}*/
