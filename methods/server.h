@@ -17,6 +17,9 @@
 #include <time.h>
 #include <iostream>
 #include <string>
+#include <list>
+
+#include "http_header.h"
 
 using std::cout;
 using std::endl;
@@ -24,6 +27,7 @@ using std::endl;
 class Hashes;
 class ServerMethod;
 class FileFd;
+
 
 struct ServerState
 {
@@ -42,6 +46,7 @@ struct ServerState
    enum {Header, Data} State;
    bool Persistent;
    std::string Location;
+   std::list<HttpLink6249Header> RFC6249Rewriters;
 
    // This is a Persistent attribute of the server itself.
    bool Pipeline;
@@ -71,9 +76,7 @@ struct ServerState
    RunHeadersResult RunHeaders(FileFd * const File);
 
    bool Comp(URI Other) const {return Other.Host == ServerName.Host && Other.Port == ServerName.Port;};
-   virtual void Reset() {Major = 0; Minor = 0; Result = 0; Code[0] = '\0'; Size = 0;
-		 StartPos = 0; Encoding = Closes; time(&Date); HaveContent = false;
-		 State = Header; Persistent = false; Pipeline = true;};
+   virtual void Reset();
    virtual bool WriteResponse(std::string const &Data) = 0;
 
    /** \brief Transfer the data from the socket */

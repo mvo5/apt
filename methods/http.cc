@@ -667,6 +667,8 @@ void HttpMethod::SendReq(FetchItem *Itm)
 {
    URI Uri = Itm->Uri;
 
+   Server->ServerName = Uri;
+
    // The HTTP server expects a hostname with a trailing :port
    std::stringstream Req;
    string ProperHost;

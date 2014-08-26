@@ -48,14 +48,14 @@ include $(PROGRAM_H)
 PROGRAM=http
 SLIBS = -lapt-pkg $(SOCKETLIBS) $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
-SOURCE = http.cc http_main.cc rfc2553emu.cc connect.cc server.cc
+SOURCE = http.cc http_main.cc http_header.cc rfc2553emu.cc connect.cc server.cc
 include $(PROGRAM_H)
 
 # The https method
 PROGRAM=https
 SLIBS = -lapt-pkg -lcurl $(INTLLIBS)
 LIB_MAKES = apt-pkg/makefile
-SOURCE = https.cc server.cc
+SOURCE = https.cc server.cc http_header.cc
 include $(PROGRAM_H)
 
 # The ftp method
@@ -83,7 +83,7 @@ include $(PROGRAM_H)
 PROGRAM=mirror
 SLIBS = -lapt-pkg $(SOCKETLIBS)
 LIB_MAKES = apt-pkg/makefile
-SOURCE = mirror.cc http.cc rfc2553emu.cc connect.cc server.cc
+SOURCE = mirror.cc http.cc http_header.cc rfc2553emu.cc connect.cc server.cc
 include $(PROGRAM_H)
 
 # SSH method symlink

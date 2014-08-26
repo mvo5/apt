@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "server.h"
+#include "http_header.h"
 
 #include <apti18n.h>
 									/*}}}*/
@@ -100,25 +101,7 @@ bool ServerState::HeaderLine(string Line)
    if (Line.empty() == true)
       return true;
 
-   string::size_type Pos = Line.find(' ');
-   if (Pos == string::npos || Pos+1 > Line.length())
-   {
-      // Blah, some servers use "connection:closes", evil.
-      Pos = Line.find(':');
-      if (Pos == string::npos || Pos + 2 > Line.length())
-	 return _error->Error(_("Bad header line"));
-      Pos++;
-   }
-
-   // Parse off any trailing spaces between the : and the next word.
-   string::size_type Pos2 = Pos;
-   while (Pos2 < Line.length() && isspace(Line[Pos2]) != 0)
-      Pos2++;
-
-   string Tag = string(Line,0,Pos);
-   string Val = string(Line,Pos2);
-
-   if (stringcasecmp(Tag.c_str(),Tag.c_str()+4,"HTTP") == 0)
+   if (stringcasecmp(Line.c_str(),Line.c_str()+4,"HTTP") == 0)
    {
       // Evil servers return no version
       if (Line[4] == '/')
@@ -156,7 +139,14 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Content-Length:") == 0)
+   HttpHeader Header = HttpHeader(Line);
+   if (Header.Empty())
+      return _error->Error(_("Bad header line"));
+
+   string Tag = Header.Name();
+   string Val = Header.Value();
+
+   if (stringcasecmp(Tag,"Content-Length") == 0)
    {
       if (Encoding == Closes)
 	 Encoding = Stream;
@@ -174,13 +164,13 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Content-Type:") == 0)
+   if (stringcasecmp(Tag,"Content-Type") == 0)
    {
       HaveContent = true;
       return true;
    }
 
-   if (stringcasecmp(Tag,"Content-Range:") == 0)
+   if (stringcasecmp(Tag,"Content-Range") == 0)
    {
       HaveContent = true;
 
@@ -197,7 +187,7 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Transfer-Encoding:") == 0)
+   if (stringcasecmp(Tag,"Transfer-Encoding") == 0)
    {
       HaveContent = true;
       if (stringcasecmp(Val,"chunked") == 0)
@@ -205,7 +195,7 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Connection:") == 0)
+   if (stringcasecmp(Tag,"Connection") == 0)
    {
       if (stringcasecmp(Val,"close") == 0)
 	 Persistent = false;
@@ -214,16 +204,57 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Last-Modified:") == 0)
+   if (stringcasecmp(Tag,"Last-Modified") == 0)
    {
       if (RFC1123StrToTime(Val.c_str(), Date) == false)
 	 return _error->Error(_("Unknown date format"));
       return true;
    }
 
-   if (stringcasecmp(Tag,"Location:") == 0)
+   if (stringcasecmp(Tag,"Location") == 0)
    {
       Location = Val;
+      return true;
+   }
+
+   unsigned long MaxRewriters = _config->FindI("Acquire::http::MaxRewriters", 4);
+   if (stringcasecmp(Tag,"Link") == 0 && MaxRewriters != 0)
+   {
+      // yay for this being the only header that APT cares about which
+      // may be present more than once:
+      vector<HttpHeader> LinkVec = Header.Split();
+      unsigned long PreviousDepth = 0;
+      for (size_t i = 0; i < LinkVec.size(); i++) 
+      {
+         HttpLink6249Header Link6249 = HttpLink6249Header(LinkVec[i]);
+
+         // ignore errors and headers we don't care about
+         if (Link6249.Empty())
+            continue;
+
+         // for now we are only interested in those with depth > 0
+         // and only add new rewriters if the depth is greater than the
+         // previous rewriter
+         if (Link6249.Depth() == 0 || Link6249.Depth() < PreviousDepth)
+            continue;
+
+         HttpLinkHeader Link(LinkVec[i]);
+         URI LinkUri = URI(Link.GetURI());
+         // avoid same-host loops and protocol switches:
+         if (LinkUri.Access != "http" || LinkUri.Host == ServerName.Host)
+            continue;
+
+         // Require a valid rewrite
+         if (Link6249.DepthPath().length() == 0)
+            continue;
+
+         if (RFC6249Rewriters.size() > MaxRewriters)
+            RFC6249Rewriters.pop_front();
+
+         Link6249.SetOrigURI(ServerName);
+         RFC6249Rewriters.push_back(Link6249);
+         PreviousDepth = Link6249.Depth();
+      }
       return true;
    }
 
@@ -236,6 +267,23 @@ ServerState::ServerState(URI Srv, ServerMethod *Owner) : ServerName(Srv), TimeOu
    Reset();
 }
 									/*}}}*/
+// ServerState::Reset - Reset the state				/*{{{*/
+void ServerState::Reset()
+{
+   Major = 0;
+   Minor = 0;
+   Result = 0;
+   Code[0] = '\0';
+   Size = 0;
+   StartPos = 0;
+   Encoding = Closes;
+   time(&Date);
+   HaveContent = false;
+   State = Header;
+   Persistent = false;
+   Pipeline = true;
+   RFC6249Rewriters.clear();
+};
 
 bool ServerMethod::Configuration(string Message)			/*{{{*/
 {
@@ -390,7 +438,7 @@ bool ServerMethod::Fetch(FetchItem *)
    // Queue the requests
    int Depth = -1;
    for (FetchItem *I = Queue; I != 0 && Depth < (signed)PipelineDepth; 
-	I = I->Next, Depth++)
+	Depth++)
    {
       // If pipelining is disabled, we only queue 1 request
       if (Server->Pipeline == false && Depth >= 0)
@@ -402,7 +450,34 @@ bool ServerMethod::Fetch(FetchItem *)
       if (QueueBack == I)
       {
 	 QueueBack = I->Next;
+         if (PipelineDepth == 0 && Server->RFC6249Rewriters.size())
+         {
+            bool Rewritten = false;
+            std::list<HttpLink6249Header>::iterator LIt;
+            for (LIt = Server->RFC6249Rewriters.begin();
+                 LIt != Server->RFC6249Rewriters.end(); ++LIt)
+            {
+               URI NewURI = LIt->Rewrite(I->Uri);
+               
+               if (NewURI.empty())
+                  continue;
+               
+               // Point to the next item before redirecting, as the
+               // current item will be destroyed:
+               I = I->Next;
+               Redirect(NewURI);
+               // Revert the effect of the increase in Depth at the end
+               // of the for loop. The pipeline limit can be applied by
+               // the method handling the final request:
+               --Depth;
+               Rewritten = true;
+               break;
+            }
+            if (Rewritten)
+               continue;
+         }
 	 SendReq(I);
+         I = I->Next;
 	 continue;
       }
    }
@@ -477,6 +552,9 @@ int ServerMethod::Loop()
       // Fill the pipeline.
       Fetch(0);
       
+      if (Queue == 0)
+         continue;
+
       // Fetch the next URL header data from the server.
       switch (Server->RunHeaders(File))
       {
