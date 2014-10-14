@@ -86,11 +86,50 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <pwd.h>
+#include <fcntl.h>
 
 #include <apti18n.h>
 									/*}}}*/
 
 using namespace std;
+
+// Check if we can write to targetdir                    		/*{{{*/
+static bool CheckDropPrivsMustBeDisabled(pkgAcquire &Fetcher)
+{
+   // no need to drop privs
+   if(getuid() != 0)
+      return true;
+
+   // the user does not want to drop privs
+   std::string SandboxUser = _config->Find("APT::Sandbox::User");
+   if (SandboxUser.empty())
+      return true;
+
+   struct passwd const * const pw = getpwnam(SandboxUser.c_str());
+   if (pw == NULL)
+      return true;
+
+   if (seteuid(pw->pw_uid) != 0)
+      return _error->Errno("seteuid()", "seteuid %u failed", pw->pw_uid);
+
+   bool res = true;
+   // check if we can write to destfile
+   for (pkgAcquire::ItemIterator I = Fetcher.ItemsBegin();
+	I != Fetcher.ItemsEnd(); ++I)
+   {
+      std::string Dir = flNotFile((*I)->DestFile);
+      int dirfd = open(Dir.c_str(), O_DIRECTORY);
+      if (faccessat(dirfd, ".", W_OK, AT_EACCESS) != 0)
+         res = false;
+      close(dirfd);
+   }
+
+   if (seteuid(0) != 0)
+      return _error->Errno("seteuid()", "seteuid %u failed", pw->pw_uid);
+
+   return res;
+}
 
 // TryToInstallBuildDep - Try to install a single package		/*{{{*/
 // ---------------------------------------------------------------------
@@ -653,6 +692,12 @@ static bool DoDownload(CommandLine &CmdL)
 
    if (_error->PendingError() == true || CheckAuth(Fetcher, false) == false)
       return false;
+
+   if(CheckDropPrivsMustBeDisabled(Fetcher) == false)
+   {
+      _error->Warning(_("Disabling DropPriviledges"));
+      _config->Set("APT::Sandbox::User", "");
+   }
 
    bool Failed = false;
    if (AcquireRun(Fetcher, 0, &Failed, NULL) == false)
