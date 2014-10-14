@@ -1544,6 +1544,10 @@ static bool DownloadChangelog(CacheFile &CacheFile, pkgAcquire &Fetcher,
 
    string descr;
    strprintf(descr, _("Changelog for %s (%s)"), Pkg.Name(), changelog_uri.c_str());
+
+   // Disable drop-privs if "_apt" can not write to the target dir
+   CheckDropPrivsMustBeDisabled(Fetcher);
+
    // queue it
    new pkgAcqFile(&Fetcher, changelog_uri, "", 0, descr, Pkg.Name(), "ignored", targetfile);
 
@@ -1555,9 +1559,6 @@ static bool DownloadChangelog(CacheFile &CacheFile, pkgAcquire &Fetcher,
       string third_party_uri;
       if (GuessThirdPartyChangelogUri(CacheFile, Ver, third_party_uri))
       {
-         // Disable drop-privs if "_apt" can not write to the target dir
-         CheckDropPrivsMustBeDisabled(Fetcher);
-
          strprintf(descr, _("Changelog for %s (%s)"), Pkg.Name(), third_party_uri.c_str());
          new pkgAcqFile(&Fetcher, third_party_uri, "", 0, descr, Pkg.Name(), "ignored", targetfile);
          Fetcher.Run();
