@@ -1560,9 +1560,7 @@ static bool DownloadChangelog(CacheFile &CacheFile, pkgAcquire &Fetcher,
 
          strprintf(descr, _("Changelog for %s (%s)"), Pkg.Name(), third_party_uri.c_str());
          new pkgAcqFile(&Fetcher, third_party_uri, "", 0, descr, Pkg.Name(), "ignored", targetfile);
-         bool Failed = false;
-         if(AcquireRun(Fetcher, 0, &Failed, NULL) == false || Failed == true)
-            return _error->Error(_("Failed to fetch changelog"));
+         Fetcher.Run();
       }
    }
 
