@@ -88,11 +88,67 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <pwd.h>
+#include <fcntl.h>
 
 #include <apti18n.h>
 									/*}}}*/
 
 using namespace std;
+
+// Check if we can write to targetdir                    		/*{{{*/
+// ---------------------------------------------------------------------
+/* Note that this can go once we use socketpair() to pass the target file
+ * to the methods
+ */
+static bool CheckDropPrivsMustBeDisabled(pkgAcquire &Fetcher)
+{
+   // no need to drop privs
+   if(getuid() != 0)
+      return true;
+
+   // the user does not want to drop privs
+   std::string SandboxUser = _config->Find("APT::Sandbox::User");
+   if (SandboxUser.empty())
+      return true;
+
+   struct passwd const * const pw = getpwnam(SandboxUser.c_str());
+   if (pw == NULL)
+      return true;
+
+   if (seteuid(pw->pw_uid) != 0)
+      return _error->Errno("seteuid()", "seteuid %u failed", pw->pw_uid);
+
+   bool res = true;
+   std::string Dir;
+   // check if we can write to destfile
+   for (pkgAcquire::ItemIterator I = Fetcher.ItemsBegin();
+	I != Fetcher.ItemsEnd(); ++I)
+   {
+      Dir = flNotFile((*I)->DestFile);
+      int dirfd = open(Dir.c_str(), O_DIRECTORY);
+      if (faccessat(dirfd, ".", W_OK, AT_EACCESS) != 0)
+      {
+         res = false;
+         break;
+      }
+      close(dirfd);
+   }
+
+   if (seteuid(0) != 0)
+      return _error->Errno("seteuid()", "seteuid %u failed", pw->pw_uid);
+
+
+   if(res == false)
+   {
+      ioprintf(c0out, _("Disabling dropping privileges because '%s' can not "
+                        "write to '%s'\n"), SandboxUser.c_str(), Dir.c_str());
+      _config->Set("APT::Sandbox::User", "");
+   }
+
+
+   return res;
+}
 
 // TryToInstallBuildDep - Try to install a single package		/*{{{*/
 // ---------------------------------------------------------------------
@@ -653,6 +709,10 @@ static bool DoDownload(CommandLine &CmdL)
    if (_error->PendingError() == true || CheckAuth(Fetcher, false) == false)
       return false;
 
+   // Disable drop-privs if "_apt" can not write to the target dir
+   CheckDropPrivsMustBeDisabled(Fetcher);
+
+
    bool Failed = false;
    if (AcquireRun(Fetcher, 0, &Failed, NULL) == false)
       return false;
@@ -892,6 +952,9 @@ static bool DoSource(CommandLine &CmdL)
 	       I->Owner->FileSize << ' ' << I->Owner->HashSum() << endl;
       return true;
    }
+
+   // Disable drop-privs if "_apt" can not write to the target dir
+   CheckDropPrivsMustBeDisabled(Fetcher);
 
    // Run it
    bool Failed = false;
@@ -1492,6 +1555,9 @@ static bool DownloadChangelog(CacheFile &CacheFile, pkgAcquire &Fetcher,
       string third_party_uri;
       if (GuessThirdPartyChangelogUri(CacheFile, Ver, third_party_uri))
       {
+         // Disable drop-privs if "_apt" can not write to the target dir
+         CheckDropPrivsMustBeDisabled(Fetcher);
+
          strprintf(descr, _("Changelog for %s (%s)"), Pkg.Name(), third_party_uri.c_str());
          new pkgAcqFile(&Fetcher, third_party_uri, "", 0, descr, Pkg.Name(), "ignored", targetfile);
          bool Failed = false;
