@@ -77,12 +77,12 @@ bool GzipMethod::Fetch(FetchItem *Itm)
       From.Open(Path, FileFd::ReadOnly, *compressor);
       if(From.FileSize() == 0)
 	 return _error->Error(_("Empty files can't be valid archives"));
-      To.Open(Itm->DestFile, FileFd::WriteAtomic);
+      To.OpenDescriptor(Itm->DestFileFd, FileFd::WriteAtomic);
    }
    else
    {
       From.Open(Path, FileFd::ReadOnly);
-      To.Open(Itm->DestFile, FileFd::WriteOnly | FileFd::Create | FileFd::Empty, *compressor);
+      To.OpenDescriptor(Itm->DestFileFd, FileFd::WriteAtomic);
    }
    To.EraseOnFailure();
 
@@ -130,9 +130,12 @@ bool GzipMethod::Fetch(FetchItem *Itm)
    times[0].tv_sec = Buf.st_atime;
    Res.LastModified = times[1].tv_sec = Buf.st_mtime;
    times[0].tv_usec = times[1].tv_usec = 0;
-   if (utimes(Itm->DestFile.c_str(), times) != 0)
-      return _error->Errno("utimes",_("Failed to set modification time"));
 
+   // FIXME: this gives me permission denied !?!
+#if 0
+   if (futimes(Itm->DestFileFd, times) != 0)
+      return _error->Errno("futimes",_("Failed to set modification time"));
+#endif
    // Return a Done response
    Res.TakeHashes(Hash);
 

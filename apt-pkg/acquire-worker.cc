@@ -34,6 +34,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <fcntl.h>
 
 #include <apti18n.h>
 									/*}}}*/
@@ -81,6 +84,8 @@ void pkgAcquire::Worker::Construct()
    Process = -1;
    InFd = -1;
    OutFd = -1;
+   PrivSepSocketFd = -1;
+   PrivSepSocketFdChild = -1;
    OutReady = false;
    InReady = false;
    Debug = _config->FindB("Debug::pkgAcquire::Worker",false);
@@ -93,6 +98,7 @@ pkgAcquire::Worker::~Worker()
 {
    close(InFd);
    close(OutFd);
+   close(PrivSepSocketFd);
    
    if (Process > 0)
    {
@@ -134,8 +140,26 @@ bool pkgAcquire::Worker::Start()
    for (int I = 0; I != 4; I++)
       SetCloseExec(Pipes[I],true);
    
+   // Create the socketpair
+   int Sockets[2] = {-1, -1};
+   if (socketpair(PF_UNIX, SOCK_DGRAM, 0, Sockets) != 0)
+   {
+      _error->Errno("socketpair", "Failed to create IPC socketpair");
+      close(Sockets[0]);
+      close(Sockets[1]);
+      return false;
+   }
+   for (int I = 0; I != 2; I++)
+      SetCloseExec(Sockets[I],true);
+   PrivSepSocketFd = Sockets[0];
+   PrivSepSocketFdChild = Sockets[1];
+
    // Fork off the process
-   Process = ExecFork();
+   std::set<int> KeepFds;
+   KeepFds.insert(PrivSepSocketFdChild);
+   KeepFds.insert(PrivSepSocketFd);
+
+   Process = ExecFork(KeepFds);
    if (Process == 0)
    {
       // Setup the FDs
@@ -144,7 +168,12 @@ bool pkgAcquire::Worker::Start()
       SetCloseExec(STDOUT_FILENO,false);
       SetCloseExec(STDIN_FILENO,false);      
       SetCloseExec(STDERR_FILENO,false);
-      
+
+      SetCloseExec(PrivSepSocketFdChild,false);
+      SetCloseExec(PrivSepSocketFd,false);
+
+      close(PrivSepSocketFd);
+
       const char *Args[2];
       Args[0] = Method.c_str();
       Args[1] = 0;
@@ -152,6 +181,7 @@ bool pkgAcquire::Worker::Start()
       cerr << "Failed to exec method " << Args[0] << endl;
       _exit(100);
    }
+   close(PrivSepSocketFdChild);
 
    // Fix up our FDs
    InFd = Pipes[0];
@@ -162,7 +192,8 @@ bool pkgAcquire::Worker::Start()
    close(Pipes[2]);
    OutReady = false;
    InReady = true;
-   
+   //close(PrivSepSocketFdChild);
+
    // Read the configuration data
    if (WaitFd(InFd) == false ||
        ReadMessages() == false)
@@ -310,8 +341,7 @@ bool pkgAcquire::Worker::RunMessages()
 	    // Display update before completion
 	    if (Log != 0 && Log->MorePulses == true)
 	       Log->Pulse(Owner->GetOwner());
-	    
-	    OwnerQ->ItemDone(Itm);
+
 	    unsigned long long const ServerSize = strtoull(LookupTag(Message,"Size","0").c_str(), NULL, 10);
             bool isHit = StringToBool(LookupTag(Message,"IMS-Hit"),false) ||
                          StringToBool(LookupTag(Message,"Alt-IMS-Hit"),false);
@@ -325,6 +355,13 @@ bool pkgAcquire::Worker::RunMessages()
 	       _error->Warning("Size of file %s is not what the server reported %s %llu",
 			       Owner->DestFile.c_str(), LookupTag(Message,"Size","0").c_str(),TotalSize);
 
+            // nothing changed, we don't need the file in partial/
+            if (isHit)
+            {
+               unlink(Owner->DestFile.c_str());
+            }
+	    OwnerQ->ItemDone(Itm);
+	    
 	    // see if there is a hash to verify
 	    HashStringList RecivedHashes;
 	    HashStringList expectedHashes = Owner->HashSums();
@@ -359,7 +396,7 @@ bool pkgAcquire::Worker::RunMessages()
 		     hide gets */
 		  if (Config->LocalOnly == false)
 		     Log->IMSHit(Desc);
-	       }	       
+	       }
 	       else
 		  Log->Done(Desc);
 	    }
@@ -375,6 +412,15 @@ bool pkgAcquire::Worker::RunMessages()
 	       _error->Error("Method gave invalid 400 URI Failure message: %s", msg.c_str());
 	       break;
 	    }
+
+            // FIXME: do only delete this file if it was opened by the
+            //        worker before and passed as a FD to the backend
+            struct stat Buf;
+            if (stat(Itm->Owner->DestFile.c_str(),&Buf) == 0)
+            {
+               if(Buf.st_size == 0)
+                  unlink(Itm->Owner->DestFile.c_str());
+            }
 
 	    // Display update before completion
 	    if (Log != 0 && Log->MorePulses == true)
@@ -393,7 +439,7 @@ bool pkgAcquire::Worker::RunMessages()
 
 	    Owner->Failed(Message,Config);
 	    ItemDone();
-
+   
 	    if (Log != 0)
 	       Log->Fail(Desc);
 
@@ -540,9 +586,38 @@ bool pkgAcquire::Worker::QueueItem(pkgAcquire::Queue::QItem *Item)
       strprintf(MaximumSize, "%llu", Item->Owner->FileSize);
       Message += "\nMaximum-Size: " + MaximumSize;
    }
+   string Tmp;
+   strprintf(Tmp, "\nPrivSepSocketFd: %i", PrivSepSocketFdChild);
+   Message += Tmp;
    Message += Item->Owner->Custom600Headers();
    Message += "\n\n";
    
+   // fd passing stuff
+   struct msghdr   msg;
+   struct cmsghdr  *cmsg;
+   struct iovec    iov;
+   char  control[sizeof(struct cmsghdr)+10];
+   FileFd DestFile = open(Item->Owner->DestFile.c_str(), O_RDWR|O_APPEND|O_CREAT, 0666);
+   int DestFileFd = DestFile.Fd();
+   iov.iov_base = (void*)"OK";
+   iov.iov_len  = 2; //strlen((const char*)iov.iov_base);
+   memset(&msg, 0, sizeof(msg));
+   msg.msg_iov = &iov;
+   msg.msg_iovlen = 1;
+   msg.msg_control = control;
+   msg.msg_controllen = sizeof(control);
+   cmsg = CMSG_FIRSTHDR(&msg);
+   cmsg->cmsg_level = SOL_SOCKET;
+   cmsg->cmsg_type = SCM_RIGHTS;
+   cmsg->cmsg_len = CMSG_LEN(sizeof(DestFileFd));
+   *(int *)CMSG_DATA(cmsg) = DestFileFd;
+   msg.msg_controllen = cmsg->cmsg_len;
+   if (sendmsg(PrivSepSocketFd, &msg, 0) < 0)
+      _error->Errno("sendmsg", "Failed to sendmsg()");
+   
+   // its ok to close it here
+   close(DestFileFd);
+
    if (Debug == true)
       clog << " -> " << Access << ':' << QuoteString(Message,"\n") << endl;
    OutQueue += Message;
@@ -591,7 +666,7 @@ bool pkgAcquire::Worker::InFdReady()
 bool pkgAcquire::Worker::MethodFailure()
 {
    _error->Error("Method %s has died unexpectedly!",Access.c_str());
-   
+
    // do not reap the child here to show meaningfull error to the user
    ExecWait(Process,Access.c_str(),false);
    Process = -1;

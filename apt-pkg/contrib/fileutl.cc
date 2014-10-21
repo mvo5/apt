@@ -1796,8 +1796,9 @@ bool FileFd::Truncate(unsigned long long To)
 	    ))
       return FileFdError("Truncating compressed files is not implemented (%s)", FileName.c_str());
 #endif
+
    if (ftruncate(iFd,To) != 0)
-      return FileFdError("Unable to truncate to %llu",To);
+      return _error->Errno("ftruncate", "Unable to truncate to %llu",To);
 
    return true;
 }

@@ -234,8 +234,10 @@ void pkgAcquire::Item::QueueURI(ItemDesc &Item)				/*{{{*/
    if (RealFileExists(DestFile))
    {
       std::string SandboxUser = _config->Find("APT::Sandbox::User");
+#if 0
       ChangeOwnerAndPermissionOfFile("GetPartialFileName", DestFile.c_str(),
                                      SandboxUser.c_str(), "root", 0600);
+#endif
    }
    Owner->Enqueue(Item);
 }
@@ -2225,7 +2227,8 @@ void pkgAcqMetaClearSig::Done(std::string Message,unsigned long long /*Size*/,
    // if we expect a ClearTextSignature (InRelase), ensure that
    // this is what we get and if not fail to queue a 
    // Release/Release.gpg, see #346386
-   if (FileExists(DestFile) && !StartsWithGPGClearTextSignature(DestFile))
+   string FileName = LookupTag(Message,"Filename");
+   if (FileExists(FileName) && !StartsWithGPGClearTextSignature(FileName))
    {
       pkgAcquire::Item::Failed(Message, Cnf);
       RenameOnError(NotClearsigned);
@@ -2494,7 +2497,9 @@ bool pkgAcqArchive::QueueNext()
 	 {
 	    PartialSize = Buf.st_size;
             std::string SandboxUser = _config->Find("APT::Sandbox::User");
+#if 0
 	    ChangeOwnerAndPermissionOfFile("pkgAcqArchive::QueueNext",DestFile.c_str(), SandboxUser.c_str(), "root", 0600);
+#endif
 	 }
       }
 
@@ -2663,7 +2668,9 @@ pkgAcqFile::pkgAcqFile(pkgAcquire *Owner,string URI, HashStringList const &Hashe
       {
 	 PartialSize = Buf.st_size;
          std::string SandboxUser = _config->Find("APT::Sandbox::User");
+#if 0
 	 ChangeOwnerAndPermissionOfFile("pkgAcqFile", DestFile.c_str(), SandboxUser.c_str(), "root", 0600);
+#endif
       }
    }
 

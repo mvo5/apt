@@ -1064,7 +1064,8 @@ bool FtpMethod::Fetch(FetchItem *Itm)
    // Open the file
    Hashes Hash;
    {
-      FileFd Fd(Itm->DestFile,FileFd::WriteAny);
+      FileFd Fd;
+      Fd.OpenDescriptor(Itm->DestFileFd,FileFd::WriteAny, true);
       if (_error->PendingError() == true)
 	 return false;
       

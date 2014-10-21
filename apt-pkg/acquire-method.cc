@@ -35,6 +35,7 @@
 #include <vector>
 #include <iostream>
 #include <stdio.h>
+#include <sys/socket.h>
 									/*}}}*/
 
 using namespace std;
@@ -378,6 +379,44 @@ int pkgAcqMethod::Run(bool Single)
             char *End;
             Tmp->MaximumSize = strtoll(LookupTag(Message, "Maximum-Size", "0").c_str(), &End, 10);
 	    Tmp->Next = 0;
+            
+            int PrivSepSocketFd = strtoul(LookupTag(Message, "PrivSepSocketFd", "-1").c_str(), &End, 10);
+            if (PrivSepSocketFd > 0)
+            {
+               char            data[1024], control[1024];
+               struct msghdr   msg;
+               struct cmsghdr  *cmsg;
+               struct iovec    iov;
+
+               memset(&msg, 0, sizeof(msg));
+               iov.iov_base   = data;
+               iov.iov_len    = sizeof(data)-1;
+               msg.msg_iov    = &iov;
+               msg.msg_iovlen = 1;
+               msg.msg_control = control;
+               msg.msg_controllen = sizeof(control);
+               
+               if (recvmsg(PrivSepSocketFd, &msg, 0) < 0)
+                  _error->Errno("recvmsg", "failed to recv msg");
+#if 0
+               data[iov.iov_len] = '\0';
+               if (strcmp(data, "OK") != 0) {
+                  _error->Error("got %s", data);
+               } else 
+#endif
+               {
+                  cmsg = CMSG_FIRSTHDR(&msg);
+                  while (cmsg != NULL) {
+                     if (cmsg->cmsg_level == SOL_SOCKET
+                         && cmsg->cmsg_type  == SCM_RIGHTS)
+                     {
+                        Tmp->DestFileFd = *(int *) CMSG_DATA(cmsg);
+                        break;
+                     }
+                     cmsg = CMSG_NXTHDR(&msg, cmsg);
+                  }
+               }
+            }
 	    
 	    // Append it to the list
 	    FetchItem **I = &Queue;

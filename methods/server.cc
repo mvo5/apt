@@ -312,7 +312,7 @@ ServerMethod::DealWithHeaders(FetchResult &Res)
 	    Server->Result = 200;
 	    Server->HaveContent = false;
 	 }
-	 else if (unlink(Queue->DestFile.c_str()) == 0)
+	 else if (ftruncate(Queue->DestFileFd, 0) == 0)
 	 {
 	    NextURI = Queue->Uri;
 	    return TRY_AGAIN_OR_REDIRECT;
@@ -339,7 +339,10 @@ ServerMethod::DealWithHeaders(FetchResult &Res)
    
    // Open the file
    delete File;
-   File = new FileFd(Queue->DestFile,FileFd::WriteAny);
+   if (Queue->DestFileFd > 0)
+      File = new FileFd(Queue->DestFileFd, true);
+   else
+      File = new FileFd(Queue->DestFile,FileFd::WriteAny);
    if (_error->PendingError() == true)
       return ERROR_NOT_FROM_SERVER;
 
@@ -582,6 +585,7 @@ int ServerMethod::Loop()
 			   Server->Pipeline = false;
 			   // we keep the PipelineDepth value so that the rest of the queue can be fixed up as well
 			}
+                        // FIXME: this will no longer work with priv-sep
 			Rename(Res.Filename, I->DestFile);
 			Res.Filename = I->DestFile;
 			BeforeI->Next = I->Next;
