@@ -17,11 +17,11 @@ insertpackage 'unstable' 'foo' 'all' '1.0'
 insertinstalledpackage 'bar' 'i386' '1.0'
 
 insertinstalledpackage 'foobar' 'i386' '1.0'
-insertpackage 'unstable' 'foobar' 'i386' '2.0'
+insertpackage 'unstable' 'foobar' 'i386' '2.0' '' '' '' '110'
 
 insertinstalledpackage 'baz' 'all' '0.1'
 insertpackage 'testing' 'baz' 'all' '1.0'
-insertpackage 'unstable' 'baz' 'all' '2.0'
+insertpackage 'unstable' 'baz' 'all' '2.0' '' '' '' '4242'
 
 setupaptarchive
 
@@ -74,3 +74,9 @@ N: There are 2 additional versions. Please use the '-a' switch to see them." apt
 apt list -qq bar baz  -o APT::Cmd::use-format=true  -o APT::Cmd::format="\${Package} - \${installed:Version} - \${candidate:Version}" > output.txt
 testequal "bar - 1.0 - 1.0
 baz - 0.1 - 2.0" cat output.txt
+
+# test sorting by download-size
+apt list -qq foobar baz --sort=download-size  -o APT::Cmd::use-format=true  -o APT::Cmd::format="\${Package} \${candidate:Version} \${Download-Size}" > output.txt
+testequal "foobar 2.0 110
+baz 2.0 4242"  cat output.txt
+

@@ -162,6 +162,13 @@ static std::string GetVersion(pkgCacheFile &/*CacheFile*/, pkgCache::VerIterator
    return "(none)";
 }
 									/*}}}*/
+static std::string GetDownloadSize(pkgCacheFile &/*CacheFile*/, pkgCache::VerIterator V)/*{{{*/
+{
+   std::string DownloadSize;
+   strprintf(DownloadSize, "%llu", V->Size);
+   return DownloadSize;
+}
+									/*}}}*/
 static std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)/*{{{*/
 {
    if (P->CurrentVer == 0)
@@ -255,6 +262,7 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,	/*{{{*/
    std::string const VersionStr = GetVersion(CacheFile, V);
    output = SubstVar(output, "${Version}", VersionStr);
    output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, V));
+   output = SubstVar(output, "${Download-Size}", GetDownloadSize(CacheFile, V));
 
    std::string StatusStr = "";
    if (P->CurrentVer != 0)
