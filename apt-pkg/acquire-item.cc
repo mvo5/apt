@@ -93,6 +93,18 @@ static std::string GetCompressedFileName(std::string const &URI, std::string con
    return Name;
 }
 									/*}}}*/
+static bool AllowInsecureRepositories(indexRecords const * const MetaIndexParser, pkgAcqMetaBase * const TransactionManager, pkgAcquire::Item * const I) /*{{{*/
+{
+   if(MetaIndexParser->IsAlwaysTrusted() || _config->FindB("Acquire::AllowInsecureRepositories") == true)
+      return true;
+
+   _error->Error(_("Use --allow-insecure-repositories to force the update"));
+   TransactionManager->AbortTransaction();
+   I->Status = pkgAcquire::Item::StatError;
+   return false;
+}
+									/*}}}*/
+
 
 // Acquire::Item::Item - Constructor					/*{{{*/
 #if __GNUC__ >= 4
@@ -203,16 +215,15 @@ void pkgAcquire::Item::Done(string Message,unsigned long long Size,HashStringLis
    step */
 bool pkgAcquire::Item::Rename(string From,string To)
 {
-   if (rename(From.c_str(),To.c_str()) != 0)
-   {
-      char S[300];
-      snprintf(S,sizeof(S),_("rename failed, %s (%s -> %s)."),strerror(errno),
-	      From.c_str(),To.c_str());
-      Status = StatError;
-      ErrorText += S;
-      return false;
-   }   
-   return true;
+   if (rename(From.c_str(),To.c_str()) == 0)
+      return true;
+
+   std::string S;
+   strprintf(S, _("rename failed, %s (%s -> %s)."), strerror(errno),
+	 From.c_str(),To.c_str());
+   Status = StatError;
+   ErrorText += S;
+   return false;
 }
 									/*}}}*/
 void pkgAcquire::Item::QueueURI(ItemDesc &Item)				/*{{{*/
@@ -220,7 +231,7 @@ void pkgAcquire::Item::QueueURI(ItemDesc &Item)				/*{{{*/
    if (RealFileExists(DestFile))
    {
       std::string SandboxUser = _config->Find("APT::Sandbox::User");
-      ChangeOwnerAndPermissionOfFile("GetPartialFileName", DestFile.c_str(),
+      ChangeOwnerAndPermissionOfFile("Item::QueueURI", DestFile.c_str(),
                                      SandboxUser.c_str(), "root", 0600);
    }
    Owner->Enqueue(Item);
@@ -292,30 +303,31 @@ void pkgAcquire::Item::ReportMirrorFailure(string FailCode)
 	     << " FailCode: " 
 	     << FailCode << std::endl;
 #endif
-   const char *Args[40];
-   unsigned int i = 0;
    string report = _config->Find("Methods::Mirror::ProblemReporting", 
 				 "/usr/lib/apt/apt-report-mirror-failure");
    if(!FileExists(report))
       return;
-   Args[i++] = report.c_str();
-   Args[i++] = UsedMirror.c_str();
-   Args[i++] = DescURI().c_str();
-   Args[i++] = FailCode.c_str();
-   Args[i++] = NULL;
+
+   std::vector<char const*> Args;
+   Args.push_back(report.c_str());
+   Args.push_back(UsedMirror.c_str());
+   Args.push_back(DescURI().c_str());
+   Args.push_back(FailCode.c_str());
+   Args.push_back(NULL);
+
    pid_t pid = ExecFork();
-   if(pid < 0) 
+   if(pid < 0)
    {
       _error->Error("ReportMirrorFailure Fork failed");
       return;
    }
-   else if(pid == 0) 
+   else if(pid == 0)
    {
-      execvp(Args[0], (char**)Args);
+      execvp(Args[0], (char**)Args.data());
       std::cerr << "Could not exec " << Args[0] << std::endl;
       _exit(100);
    }
-   if(!ExecWait(pid, "report-mirror-failure")) 
+   if(!ExecWait(pid, "report-mirror-failure"))
    {
       _error->Warning("Couldn't report problem to '%s'",
 		      _config->Find("Methods::Mirror::ProblemReporting").c_str());
@@ -1544,7 +1556,12 @@ void pkgAcqMetaBase::AbortTransaction()
          if(FileExists(PartialFile))
             Rename(PartialFile, PartialFile + ".FAILED");
       }
+      // fix permissions for existing files which were part of a reverify
+      // like InRelease files or files in partial we might work with next time
+      else if (FileExists((*I)->DestFile))
+	 ChangeOwnerAndPermissionOfFile("AbortTransaction", (*I)->DestFile.c_str(), "root", "root", 0644);
    }
+   Transaction.clear();
 }
 									/*}}}*/
 // AcqMetaBase::TransactionHasError - Check for errors in Transaction	/*{{{*/
@@ -1591,6 +1608,7 @@ void pkgAcqMetaBase::CommitTransaction()
       // mark that this transaction is finished
       (*I)->TransactionManager = 0;
    }
+   Transaction.clear();
 }
 									/*}}}*/
 // AcqMetaBase::TransactionStageCopy - Stage a file for copying		/*{{{*/
@@ -1770,16 +1788,12 @@ void pkgAcqMetaSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf)/*{{{*/
    TransactionManager->TransactionStageRemoval(this, DestFile);
 
    // only allow going further if the users explicitely wants it
-   if(MetaIndexParser->IsAlwaysTrusted() || _config->FindB("Acquire::AllowInsecureRepositories") == true)
+   if(AllowInsecureRepositories(MetaIndexParser, TransactionManager, this) == true)
    {
       // we parse the indexes here because at this point the user wanted
       // a repository that may potentially harm him
       MetaIndexParser->Load(MetaIndexFile);
       QueueIndexes(true);
-   } 
-   else 
-   {
-      _error->Error("Use --allow-insecure-repositories to force the update");
    }
 
    Item::Failed(Message,Cnf);
@@ -2148,7 +2162,7 @@ void pkgAcqMetaIndex::Failed(string Message,
    // No Release file was present so fall
    // back to queueing Packages files without verification
    // only allow going further if the users explicitely wants it
-   if(MetaIndexParser->IsAlwaysTrusted() || _config->FindB("Acquire::AllowInsecureRepositories") == true)
+   if(AllowInsecureRepositories(MetaIndexParser, TransactionManager, this) == true)
    {
       // Done, queue for rename on transaction finished
       if (FileExists(DestFile)) 
@@ -2156,12 +2170,6 @@ void pkgAcqMetaIndex::Failed(string Message,
 
       // queue without any kind of hashsum support
       QueueIndexes(false);
-   } else {
-      // warn if the repository is unsinged
-      _error->Error("Use --allow-insecure-repositories to force the update");
-      TransactionManager->AbortTransaction();
-      Status = StatError;
-      return;
    }
 }
 									/*}}}*/
@@ -2273,7 +2281,7 @@ void pkgAcqMetaClearSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf) /*
       // No Release file was present, or verification failed, so fall
       // back to queueing Packages files without verification
       // only allow going further if the users explicitely wants it
-      if(MetaIndexParser->IsAlwaysTrusted() || _config->FindB("Acquire::AllowInsecureRepositories") == true)
+      if(AllowInsecureRepositories(MetaIndexParser, TransactionManager, this) == true)
       {
 	 Status = StatDone;
 
@@ -2294,11 +2302,6 @@ void pkgAcqMetaClearSig::Failed(string Message,pkgAcquire::MethodConfig *Cnf) /*
             TransactionManager->TransactionStageCopy(this, DestFile, FinalFile);
          }
          QueueIndexes(false);
-      } else {
-         // warn if the repository is unsigned
-         _error->Error("Use --allow-insecure-repositories to force the update");
-         TransactionManager->AbortTransaction();
-         Status = StatError;
       }
    }
 }

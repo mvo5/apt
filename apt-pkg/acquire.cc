@@ -81,11 +81,19 @@ static bool SetupAPTPartialDirectory(std::string const &grand, std::string const
 	 CreateAPTDirectoryIfNeeded(parent, partial) == false)
       return false;
 
-   if (getuid() == 0) // if we aren't root, we can't chown, so don't try it
+   if (getuid() == 0)
    {
       std::string SandboxUser = _config->Find("APT::Sandbox::User");
       struct passwd *pw = getpwnam(SandboxUser.c_str());
       struct group *gr = getgrnam("root");
+      if (pw != NULL && gr != NULL)
+      {
+         // chown the auth.conf file
+         std::string const AuthConf = _config->FindFile("Dir::Etc::netrc");
+	 if(AuthConf.empty() == false && RealFileExists(AuthConf) &&
+	       chown(AuthConf.c_str(), pw->pw_uid, gr->gr_gid) != 0)
+	    _error->WarningE("SetupAPTPartialDirectory", "chown to %s:root of file %s failed", SandboxUser.c_str(), AuthConf.c_str());
+      }
    }
 
    return true;
