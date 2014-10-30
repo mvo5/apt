@@ -65,20 +65,6 @@ static void printHashSumComparision(std::string const &URI, HashStringList const
       std::cerr <<  "\t- " << hs->toStr() << std::endl;
 }
 									/*}}}*/
-static void ChangeOwnerAndPermissionOfFile(char const * const requester, char const * const file, char const * const user, char const * const group, mode_t const mode) /*{{{*/
-{
-   // ensure the file is owned by root and has good permissions
-   struct passwd const * const pw = getpwnam(user);
-   struct group const * const gr = getgrnam(group);
-   if (getuid() == 0) // if we aren't root, we can't chown, so don't try it
-   {
-      if (pw != NULL && gr != NULL && chown(file, pw->pw_uid, gr->gr_gid) != 0)
-	 _error->WarningE(requester, "chown to %s:%s of file %s failed", user, group, file);
-   }
-   if (chmod(file, mode) != 0)
-      _error->WarningE(requester, "chmod 0%o of file %s failed", mode, file);
-}
-									/*}}}*/
 static std::string GetPartialFileName(std::string const &file)		/*{{{*/
 {
    std::string DestFile = _config->FindDir("Dir::State::lists") + "partial/";
@@ -234,10 +220,8 @@ void pkgAcquire::Item::QueueURI(ItemDesc &Item)				/*{{{*/
    if (RealFileExists(DestFile))
    {
       std::string SandboxUser = _config->Find("APT::Sandbox::User");
-#if 0
       ChangeOwnerAndPermissionOfFile("GetPartialFileName", DestFile.c_str(),
                                      SandboxUser.c_str(), "root", 0600);
-#endif
    }
    Owner->Enqueue(Item);
 }
@@ -2497,9 +2481,7 @@ bool pkgAcqArchive::QueueNext()
 	 {
 	    PartialSize = Buf.st_size;
             std::string SandboxUser = _config->Find("APT::Sandbox::User");
-#if 0
 	    ChangeOwnerAndPermissionOfFile("pkgAcqArchive::QueueNext",DestFile.c_str(), SandboxUser.c_str(), "root", 0600);
-#endif
 	 }
       }
 
@@ -2668,9 +2650,7 @@ pkgAcqFile::pkgAcqFile(pkgAcquire *Owner,string URI, HashStringList const &Hashe
       {
 	 PartialSize = Buf.st_size;
          std::string SandboxUser = _config->Find("APT::Sandbox::User");
-#if 0
 	 ChangeOwnerAndPermissionOfFile("pkgAcqFile", DestFile.c_str(), SandboxUser.c_str(), "root", 0600);
-#endif
       }
    }
 

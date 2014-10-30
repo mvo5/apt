@@ -598,6 +598,12 @@ bool pkgAcquire::Worker::QueueItem(pkgAcquire::Queue::QItem *Item)
    struct iovec    iov;
    char  control[sizeof(struct cmsghdr)+10];
    FileFd DestFile = open(Item->Owner->DestFile.c_str(), O_RDWR|O_APPEND|O_CREAT, 0666);
+   std::string SandboxUser = _config->Find("APT::Sandbox::User");
+   // some methods need to do a futimes() so it needs to be owner by _apt
+   ChangeOwnerAndPermissionOfFile("pkgAcquire::Worker::QueueItem",
+                                  Item->Owner->DestFile.c_str(),
+                                  SandboxUser.c_str(), "root", 0600);
+
    int DestFileFd = DestFile.Fd();
    iov.iov_base = (void*)"OK";
    iov.iov_len  = 2; //strlen((const char*)iov.iov_base);

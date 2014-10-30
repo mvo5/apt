@@ -131,11 +131,9 @@ bool GzipMethod::Fetch(FetchItem *Itm)
    Res.LastModified = times[1].tv_sec = Buf.st_mtime;
    times[0].tv_usec = times[1].tv_usec = 0;
 
-   // FIXME: this gives me permission denied !?!
-#if 0
    if (futimes(Itm->DestFileFd, times) != 0)
       return _error->Errno("futimes",_("Failed to set modification time"));
-#endif
+
    // Return a Done response
    Res.TakeHashes(Hash);
 

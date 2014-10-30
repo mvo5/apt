@@ -237,5 +237,8 @@ std::vector<std::string> Glob(std::string const &pattern, int flags=0);
  */
 bool Popen(const char* Args[], FileFd &Fd, pid_t &Child, FileFd::OpenMode Mode);
 
-
+/** \brief Change the owner and permission of the given filename 
+ *
+ */
+void ChangeOwnerAndPermissionOfFile(char const * const requester, char const * const file, char const * const user, char const * const group, mode_t const mode);
 #endif
