@@ -169,6 +169,13 @@ static std::string GetDownloadSize(pkgCacheFile &/*CacheFile*/, pkgCache::VerIte
    return DownloadSize;
 }
 									/*}}}*/
+static std::string GetInstalledSize(pkgCacheFile &CacheFile, pkgCache::VerIterator V)/*{{{*/
+{
+   string InstalledSize;
+   strprintf(InstalledSize, "%llu", V->InstalledSize);
+   return InstalledSize;
+}
+									/*}}}*/
 static std::string GetArchitecture(pkgCacheFile &CacheFile, pkgCache::PkgIterator P)/*{{{*/
 {
    if (P->CurrentVer == 0)
@@ -263,6 +270,9 @@ void ListSingleVersion(pkgCacheFile &CacheFile, pkgRecords &records,	/*{{{*/
    output = SubstVar(output, "${Version}", VersionStr);
    output = SubstVar(output, "${Origin}", GetArchiveSuite(CacheFile, V));
    output = SubstVar(output, "${Download-Size}", GetDownloadSize(CacheFile, V));
+   output = SubstVar(output, "${Installed-Size}", GetInstalledSize(CacheFile, V));
+   output = SubstVar(output, "${Download-Size-Nice}", SizeToStr(atoll(GetDownloadSize(CacheFile, V).c_str())));
+   output = SubstVar(output, "${Installed-Size-Nice}", SizeToStr(atoll(GetInstalledSize(CacheFile, V).c_str())));
 
    std::string StatusStr = "";
    if (P->CurrentVer != 0)

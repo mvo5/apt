@@ -36,7 +36,7 @@ struct PackageSortAlphabetic						/*{{{*/
        return (l_name < r_name);
     }
 };
-
+									/*}}}*/
 struct PackageSortDownloadSize						/*{{{*/
 {
    bool operator () (const pkgCache::VerIterator &v_lhs, 
@@ -47,7 +47,20 @@ struct PackageSortDownloadSize						/*{{{*/
        return (l_size < r_size);
     }
 };
+									/*}}}*/
+struct PackageSortInstalledSize						/*{{{*/
+{
+   bool operator () (const pkgCache::VerIterator &v_lhs, 
+                     const pkgCache::VerIterator &v_rhs)
+    {
+       pkgCache::VerFileIterator Vf;
+       const unsigned long long l_size = v_lhs->InstalledSize;
+       const unsigned long long r_size = v_rhs->InstalledSize;
 
+       return (l_size < r_size);
+    }
+};
+									/*}}}*/
 class PackageNameMatcher : public Matcher
 {
 #ifdef PACKAGE_MATCHER_ABI_COMPAT
@@ -116,6 +129,12 @@ static bool OutputList(pkgCacheFile &CacheFile, pkgRecords &records,
    if (_config->FindB("APT::Cmd::List-Include-Summary", false) == true)
       format += "\n  ${Description}\n";
 
+   std::string SortMode = _config->Find("Apt::List::Sort-Mode", "alphabetic");
+   if(SortMode == "download-size")
+      format += " ${Download-Size-Nice}";
+   else if(SortMode == "installed-size")
+      format += " ${Installed-Size-Nice}";
+
    std::map<const pkgCache::VerIterator, std::string, T> output_map;
    for (LocalitySortedVersionSet::iterator V = bag.begin(); V != bag.end(); ++V)
    {
@@ -181,6 +200,8 @@ bool DoList(CommandLine &Cmd)
       return OutputList<PackageSortAlphabetic>(CacheFile, records, bag);
    else if (SortMode == "download-size")
       return OutputList<PackageSortDownloadSize>(CacheFile, records, bag);
+   else if (SortMode == "installed-size")
+      return OutputList<PackageSortInstalledSize>(CacheFile, records, bag);
    else
       _error->Warning(_("Unknown Apt::List::SortMode mode %s"), SortMode.c_str());
 
