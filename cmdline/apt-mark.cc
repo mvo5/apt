@@ -169,6 +169,41 @@ static bool ShowAuto(CommandLine &CmdL)
    return true;
 }
 									/*}}}*/
+/* Show - show installed packages and automatic install status (sorted)	{{{*/
+static bool Show(CommandLine &CmdL)
+{
+   pkgCacheFile CacheFile;
+   pkgCache *Cache = CacheFile.GetPkgCache();
+   pkgDepCache *DepCache = CacheFile.GetDepCache();
+   if (unlikely(Cache == NULL || DepCache == NULL))
+      return false;
+
+   std::vector<std::pair<string,bool> > packages;
+   if (CmdL.FileList[1] == 0)
+   {
+      packages.reserve(Cache->HeaderP->PackageCount / 3);
+      for (pkgCache::PkgIterator P = Cache->PkgBegin(); P.end() == false; ++P)
+	 if (P->CurrentVer != 0)
+	    packages.push_back(std::make_pair(P.FullName(true), ((*DepCache)[P].Flags & pkgCache::Flag::Auto) == pkgCache::Flag::Auto));
+   }
+   else
+   {
+      APT::CacheSetHelper helper(false); // do not show errors
+      APT::PackageSet pkgset = APT::PackageSet::FromCommandLine(CacheFile, CmdL.FileList + 1, helper);
+      packages.reserve(pkgset.size());
+      for (APT::PackageSet::const_iterator P = pkgset.begin(); P != pkgset.end(); ++P)
+	 if (P->CurrentVer != 0)
+            packages.push_back(std::make_pair(P.FullName(true), ((*DepCache)[P].Flags & pkgCache::Flag::Auto) == pkgCache::Flag::Auto));
+   }
+
+   std::sort(packages.begin(), packages.end());
+
+   for (std::vector<std::pair<string, bool> >::const_iterator I = packages.begin(); I != packages.end(); ++I)
+      std::cout << (*I).first << "\t" << ((*I).second ? "auto" : "manual") << std::endl;
+
+   return true;
+}
+									/*}}}*/
 /* DoHold - mark packages as hold by dpkg				{{{*/
 static bool DoHold(CommandLine &CmdL)
 {
@@ -399,6 +434,7 @@ static bool ShowHelp(CommandLine &)
       "   manual - Mark the given packages as manually installed\n"
       "   hold - Mark a package as held back\n"
       "   unhold - Unset a package set as held back\n"
+      "   list - Print the list of installed packages and their auto status\n"
       "   showauto - Print the list of automatically installed packages\n"
       "   showmanual - Print the list of manually installed packages\n"
       "   showhold - Print the list of package on hold\n"
@@ -423,6 +459,7 @@ int main(int argc,const char *argv[])					/*{{{*/
 				   {"manual",&DoAuto},
 				   {"hold",&DoHold},
 				   {"unhold",&DoHold},
+                                   {"show",&Show},
 				   {"showauto",&ShowAuto},
 				   {"showmanual",&ShowAuto},
 				   {"showhold",&ShowHold},
