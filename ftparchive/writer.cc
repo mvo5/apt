@@ -1018,7 +1018,9 @@ ReleaseWriter::ReleaseWriter(FileFd * const GivenOutput, string const &/*DB*/) :
    Fields["Architectures"] = "";
    Fields["Components"] = "";
    Fields["Description"] = "";
-
+   if (_config->FindB("APT::FTPArchive::DoByHash", true) == true)
+      Fields["Acquire-By-Hash"] = "true";
+   
    for(map<string,string>::const_iterator I = Fields.begin();
        I != Fields.end();
        ++I)
@@ -1069,6 +1071,34 @@ bool ReleaseWriter::DoPackage(string FileName)
    hs.AddFD(fd);
    CheckSums[NewFileName].Hashes = hs.GetHashStringList();
    fd.Close();
+
+   // FIXME: wrong layer in the code
+   // FIXME2: symlink instead of create a copy
+   if (_config->FindB("APT::FTPArchive::DoByHash", true) == true)
+   {
+      std::string Input = FileName;
+      HashStringList hsl = hs.GetHashStringList();
+      for(HashStringList::const_iterator h = hsl.begin();
+          h != hsl.end(); ++h)
+      {
+         if (!h->usable())
+            continue;
+         std::string const ByHash = "/by-hash/" + h->HashType() + "/" + h->HashValue();
+         std::string ByHashOutputFile = Input;
+         size_t const trailing_slash = ByHashOutputFile.find_last_of("/");
+         ByHashOutputFile = ByHashOutputFile.replace(
+            trailing_slash,
+            ByHashOutputFile.substr(trailing_slash+1).size()+1,
+            ByHash);
+         
+         if(!CreateDirectory(flNotFile(Input), flNotFile(ByHashOutputFile)))
+            return _error->Warning("can not create dir %s", flNotFile(ByHashOutputFile).c_str());
+         FileFd In(Input, FileFd::ReadOnly);
+         FileFd Out(ByHashOutputFile, FileFd::WriteEmpty);
+         if(!CopyFile(In, Out))
+            return _error->Warning("failed to copy %s %s", Input.c_str(), ByHashOutputFile.c_str());
+      }
+   }
 
    return true;
 }

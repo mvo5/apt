@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+
+#
+# main()
+#
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+setupenvironment
+configarchitecture 'i386'
+
+# build one pacakge
+buildsimplenativepackage 'foo' 'i386' '1' 'unstable'
+buildaptarchivefromincoming
+
+# verify
+testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages)
+testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages.gz)
+
+
+# insert new package
+buildsimplenativepackage 'bar' 'i386' '1' 'unstable'
+# and build again
+buildaptarchivefromincoming
+
+# ensure the new package packag is there
+testsuccess zgrep "Package: bar" aptarchive/dists/unstable/main/binary-i386/Packages.gz
+
+# ensure we have the by-hash stuff
+testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages)
+testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages.gz)
+
+# ensure we have it in the Release file
+testsuccess grep "Acquire-By-Hash: true" aptarchive/dists/unstable/*Release
+

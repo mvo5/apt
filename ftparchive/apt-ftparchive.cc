@@ -216,7 +216,7 @@ bool PackageMap::GenPackages(Configuration &Setup,struct CacheDB::Stats &Stats)
    }
    
    Packages.Output = 0;      // Just in case
-   
+
    // Finish compressing
    unsigned long long Size;
    if (Comp.Finalize(Size) == false)

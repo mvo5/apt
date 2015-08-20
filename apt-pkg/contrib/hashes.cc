@@ -129,6 +129,14 @@ APT_PURE bool HashString::empty() const					/*{{{*/
    return (Type.empty() || Hash.empty());
 }
 									/*}}}*/
+APT_PURE bool HashString::usable() const				/*{{{*/
+{
+   return (
+      (Type != "Checksum-FileSize") &&
+      (Type != "MD5Sum")
+   );
+}
+									/*}}}*/
 std::string HashString::toStr() const					/*{{{*/
 {
    return Type + ":" + Hash;
@@ -153,8 +161,7 @@ bool HashStringList::usable() const					/*{{{*/
    {
       // FileSize alone isn't usable
       for (std::vector<HashString>::const_iterator hs = list.begin(); hs != list.end(); ++hs)
-	 if (hs->HashType() != "Checksum-FileSize")
-	    return true;
+	 return hs->usable();
       return false;
    }
    return find(forcedType) != NULL;
