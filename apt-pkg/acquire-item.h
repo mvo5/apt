@@ -944,6 +944,9 @@ class APT_HIDDEN pkgAcqIndex : public pkgAcqBaseIndex
    /** \brief Do the changes needed to fetch via AptByHash (if needed) */
    void InitByHashIfNeeded();
 
+   /** \brief Do the changes needed to fetch via UniqPrefix (if needed) */
+   void InitByUniqPrefixIfNeeded();
+      
    /** \brief Auto select the right compression to use */
    void AutoSelectCompression();
 

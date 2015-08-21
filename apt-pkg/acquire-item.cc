@@ -2393,9 +2393,10 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc,
       DestFile = DestFile + '.' + CurrentCompressionExtension;
    }
 
-   if(TransactionManager->MetaIndexParser != NULL)
+   if(TransactionManager->MetaIndexParser != NULL) {
+      InitByUniqPrefixIfNeeded();
       InitByHashIfNeeded();
-
+   }
    Desc.Description = URIDesc;
    Desc.Owner = this;
    Desc.ShortDesc = ShortDesc;
@@ -2403,6 +2404,24 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc,
    QueueURI(Desc);
 }
 									/*}}}*/
+void pkgAcqIndex::InitByUniqPrefixIfNeeded()
+{
+#if 1
+   if(TransactionManager->MetaIndexParser->GetUniqPrefix() == "")
+      return;
+
+   std::string const ByUniqPrefix = TransactionManager->MetaIndexParser->GetUniqPrefix();
+#else
+   std::string const ByUniqPrefix = _config->Find("APT::Acquire::UniqPrefix", "");
+#endif
+   std::string parentURI = TransactionManager->DescURI();
+   size_t const trailing_slash = parentURI.find_last_of("/");
+   parentURI = parentURI.substr(0, trailing_slash);
+
+   Desc.URI = Desc.URI.insert(
+      parentURI.size(),
+      "/"+ByUniqPrefix);
+}
 // AcqIndex::AdjustForByHash - modify URI for by-hash support		/*{{{*/
 void pkgAcqIndex::InitByHashIfNeeded()
 {

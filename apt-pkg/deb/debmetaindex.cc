@@ -240,7 +240,8 @@ bool debReleaseIndex::Load(std::string const &Filename, std::string * const Erro
    }
    // FIXME: find better tag name
    SupportsAcquireByHash = Section.FindB("Acquire-By-Hash", false);
-
+   UniqPrefix = Section.FindS("Acquire-Uniq-Prefix");
+   
    Suite = Section.FindS("Suite");
    Codename = Section.FindS("Codename");
 

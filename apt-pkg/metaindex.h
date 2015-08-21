@@ -59,6 +59,7 @@ protected:
    time_t Date;
    time_t ValidUntil;
    bool SupportsAcquireByHash;
+   std::string UniqPrefix;
    std::map<std::string, checkSum *> Entries;
    TriState LoadedSuccessfully;
 
@@ -73,6 +74,7 @@ public:
    std::string GetCodename() const;
    std::string GetSuite() const;
    bool GetSupportsAcquireByHash() const;
+   std::string GetUniqPrefix() const;
    time_t GetValidUntil() const;
    time_t GetDate() const;
 

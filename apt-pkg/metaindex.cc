@@ -49,6 +49,7 @@ APT_PURE std::string metaIndex::GetSignedBy() const { return SignedBy; }
 APT_PURE std::string metaIndex::GetCodename() const { return Codename; }
 APT_PURE std::string metaIndex::GetSuite() const { return Suite; }
 APT_PURE bool metaIndex::GetSupportsAcquireByHash() const { return SupportsAcquireByHash; }
+APT_PURE std::string metaIndex::GetUniqPrefix() const { return UniqPrefix; }
 APT_PURE time_t metaIndex::GetValidUntil() const { return ValidUntil; }
 APT_PURE time_t metaIndex::GetDate() const { return this->Date; }
 APT_PURE metaIndex::TriState metaIndex::GetLoadedSuccessfully() const { return LoadedSuccessfully; }
