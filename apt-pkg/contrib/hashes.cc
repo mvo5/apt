@@ -159,9 +159,10 @@ bool HashStringList::usable() const					/*{{{*/
    std::string const forcedType = _config->Find("Acquire::ForceHash", "");
    if (forcedType.empty() == true)
    {
-      // FileSize alone isn't usable
-      for (std::vector<HashString>::const_iterator hs = list.begin(); hs != list.end(); ++hs)
-	 return hs->usable();
+      // See if there is at least one usable hash
+      for (auto const &hs: list)
+         if (hs.usable())
+            return true;
       return false;
    }
    return find(forcedType) != NULL;

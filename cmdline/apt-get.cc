@@ -629,9 +629,6 @@ static bool DoDownload(CommandLine &CmdL)
       return true;
    }
 
-   // Disable drop-privs if "_apt" can not write to the target dir
-   CheckDropPrivsMustBeDisabled(Fetcher);
-
    if (_error->PendingError() == true || CheckAuth(Fetcher, false) == false)
       return false;
 
@@ -849,9 +846,6 @@ static bool DoSource(CommandLine &CmdL)
 	       I->Owner->FileSize << ' ' << I->Owner->HashSum() << endl;
       return true;
    }
-
-   // Disable drop-privs if "_apt" can not write to the target dir
-   CheckDropPrivsMustBeDisabled(Fetcher);
 
    // check authentication status of the source as well
    if (UntrustedList.empty() == false && AuthPrompt(UntrustedList, false) == false)
@@ -1403,11 +1397,6 @@ static bool DoChangelog(CommandLine &CmdL)
 
    if (printOnly == false)
    {
-      // Disable drop-privs if "_apt" can not write to the target dir
-      CheckDropPrivsMustBeDisabled(Fetcher);
-      if (_error->PendingError() == true)
-	 return false;
-
       bool Failed = false;
       if (AcquireRun(Fetcher, 0, &Failed, NULL) == false || Failed == true)
 	 return false;
@@ -1498,11 +1487,21 @@ static bool DoIndexTargets(CommandLine &CmdL)
 	       << "Description: " << T->Description << "\n"
 	       << "URI: " << T->URI << "\n"
 	       << "Filename: " << filename << "\n"
-	       << "Optional: " << (T->IsOptional ? "yes" : "no") << "\n";
+	       << "Optional: " << (T->IsOptional ? "yes" : "no") << "\n"
+	       << "KeepCompressed: " << (T->KeepCompressed ? "yes" : "no") << "\n";
 	    for (std::map<std::string,std::string>::const_iterator O = AddOptions.begin(); O != AddOptions.end(); ++O)
 	       stanza << format_key(O->first) << ": " << O->second << "\n";
 	    for (std::map<std::string,std::string>::const_iterator O = T->Options.begin(); O != T->Options.end(); ++O)
-	       stanza << format_key(O->first) << ": " << O->second << "\n";
+	    {
+	       if (O->first == "PDIFFS")
+		  stanza << "PDiffs: " << O->second << "\n";
+	       else if (O->first == "COMPRESSIONTYPES")
+		  stanza << "CompressionTypes: " << O->second << "\n";
+	       else if (O->first == "DEFAULTENABLED")
+		  stanza << "DefaultEnabled: " << O->second << "\n";
+	       else
+		  stanza << format_key(O->first) << ": " << O->second << "\n";
+	    }
 	    stanza << "\n";
 
 	    if (Filtered)
@@ -1649,6 +1648,7 @@ int main(int argc,const char *argv[])					/*{{{*/
 				   {"markauto",&DoMarkAuto},
 				   {"unmarkauto",&DoMarkAuto},
                                    {"dist-upgrade",&DoDistUpgrade},
+                                   {"full-upgrade",&DoDistUpgrade},
                                    {"dselect-upgrade",&DoDSelectUpgrade},
 				   {"build-dep",&DoBuildDep},
                                    {"clean",&DoClean},

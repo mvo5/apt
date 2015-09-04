@@ -153,12 +153,8 @@ bool CacheSetHelper::PackageFromRegEx(PackageContainerInterface * const pci, pkg
 			continue;
 		pkgCache::PkgIterator Pkg = Grp.FindPkg(arch);
 		if (Pkg.end() == true) {
-			if (archfound == std::string::npos) {
-				std::vector<std::string> archs = APT::Configuration::getArchitectures();
-				for (std::vector<std::string>::const_iterator a = archs.begin();
-				     a != archs.end() && Pkg.end() != true; ++a)
-					Pkg = Grp.FindPkg(*a);
-			}
+			if (archfound == std::string::npos)
+				Pkg = Grp.FindPreferredPkg(true);
 			if (Pkg.end() == true)
 				continue;
 		}
@@ -213,12 +209,8 @@ bool CacheSetHelper::PackageFromFnmatch(PackageContainerInterface * const pci,
 			continue;
 		pkgCache::PkgIterator Pkg = Grp.FindPkg(arch);
 		if (Pkg.end() == true) {
-			if (archfound == std::string::npos) {
-				std::vector<std::string> archs = APT::Configuration::getArchitectures();
-				for (std::vector<std::string>::const_iterator a = archs.begin();
-				     a != archs.end() && Pkg.end() != true; ++a)
-					Pkg = Grp.FindPkg(*a);
-			}
+			if (archfound == std::string::npos)
+				Pkg = Grp.FindPreferredPkg(true);
 			if (Pkg.end() == true)
 				continue;
 		}
@@ -696,12 +688,12 @@ bool VersionContainerInterface::FromDependency(VersionContainerInterface * const
 pkgCache::VerIterator VersionContainerInterface::getCandidateVer(pkgCacheFile &Cache,
 		pkgCache::PkgIterator const &Pkg, CacheSetHelper &helper) {
 	pkgCache::VerIterator Cand;
-	if (Cache.IsPolicyBuilt() == true || Cache.IsDepCacheBuilt() == false) {
-		if (unlikely(Cache.GetPolicy() == 0))
-			return pkgCache::VerIterator(Cache);
-		Cand = Cache.GetPolicy()->GetCandidateVer(Pkg);
-	} else {
+	if (Cache.IsDepCacheBuilt() == true) {
 		Cand = Cache[Pkg].CandidateVerIter(Cache);
+	} else if (unlikely(Cache.GetPolicy() == nullptr)) {
+		return pkgCache::VerIterator(Cache);
+	} else {
+		Cand = Cache.GetPolicy()->GetCandidateVer(Pkg);
 	}
 	if (Cand.end() == true)
 		return helper.canNotGetVersion(CacheSetHelper::CANDIDATE, Cache, Pkg);

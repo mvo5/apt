@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
+#include <sstream>
 
 #include <sys/stat.h>
 #include <string.h>
@@ -32,10 +33,12 @@ class APT_HIDDEN debReleaseIndexPrivate					/*{{{*/
    public:
    struct APT_HIDDEN debSectionEntry
    {
+      std::string sourcesEntry;
       std::string Name;
       std::vector<std::string> Targets;
       std::vector<std::string> Architectures;
       std::vector<std::string> Languages;
+      bool UsePDiffs;
    };
 
    std::vector<debSectionEntry> DebEntries;
@@ -120,18 +123,35 @@ static void GetIndexTargetsFor(char const * const Type, std::string const &URI, 
    std::string const Release = (Dist == "/") ? "" : Dist;
    std::string const Site = ::URI::ArchiveOnly(URI);
 
+   std::string DefCompressionTypes;
+   {
+      std::vector<std::string> types = APT::Configuration::getCompressionTypes();
+      if (types.empty() == false)
+      {
+	 std::ostringstream os;
+	 std::copy(types.begin(), types.end()-1, std::ostream_iterator<std::string>(os, " "));
+	 os << *types.rbegin();
+	 DefCompressionTypes = os.str();
+      }
+   }
+   std::string const NativeArch = _config->Find("APT::Architecture");
    bool const GzipIndex = _config->FindB("Acquire::GzipIndexes", false);
    for (std::vector<debReleaseIndexPrivate::debSectionEntry>::const_iterator E = entries.begin(); E != entries.end(); ++E)
    {
       for (std::vector<std::string>::const_iterator T = E->Targets.begin(); T != E->Targets.end(); ++T)
       {
-#define APT_T_CONFIG(X) _config->Find(std::string("Acquire::IndexTargets::") + Type  + "::" + *T + "::" + (X))
-	 std::string const tplMetaKey = APT_T_CONFIG(flatArchive ? "flatMetaKey" : "MetaKey");
-	 std::string const tplShortDesc = APT_T_CONFIG("ShortDescription");
-	 std::string const tplLongDesc = "$(SITE) " + APT_T_CONFIG(flatArchive ? "flatDescription" : "Description");
-	 bool const IsOptional = _config->FindB(std::string("Acquire::IndexTargets::") + Type + "::" + *T + "::Optional", true);
-	 bool const KeepCompressed = _config->FindB(std::string("Acquire::IndexTargets::") + Type + "::" + *T + "::KeepCompressed", GzipIndex);
-#undef APT_T_CONFIG
+#define APT_T_CONFIG_STR(X, Y) _config->Find(std::string("Acquire::IndexTargets::") + Type  + "::" + *T + "::" + (X), (Y))
+#define APT_T_CONFIG_BOOL(X, Y) _config->FindB(std::string("Acquire::IndexTargets::") + Type  + "::" + *T + "::" + (X), (Y))
+	 std::string const tplMetaKey = APT_T_CONFIG_STR(flatArchive ? "flatMetaKey" : "MetaKey", "");
+	 std::string const tplShortDesc = APT_T_CONFIG_STR("ShortDescription", "");
+	 std::string const tplLongDesc = "$(SITE) " + APT_T_CONFIG_STR(flatArchive ? "flatDescription" : "Description", "");
+	 bool const IsOptional = APT_T_CONFIG_BOOL("Optional", true);
+	 bool const KeepCompressed = APT_T_CONFIG_BOOL("KeepCompressed", GzipIndex);
+	 bool const DefaultEnabled = APT_T_CONFIG_BOOL("DefaultEnabled", true);
+	 bool const UsePDiffs = APT_T_CONFIG_BOOL("PDiffs", E->UsePDiffs);
+	 std::string const CompressionTypes = APT_T_CONFIG_STR("CompressionTypes", DefCompressionTypes);
+#undef APT_T_CONFIG_BOOL
+#undef APT_T_CONFIG_STR
 	 if (tplMetaKey.empty())
 	    continue;
 
@@ -142,7 +162,7 @@ static void GetIndexTargetsFor(char const * const Type, std::string const &URI, 
 
 	    for (std::vector<std::string>::const_iterator A = E->Architectures.begin(); A != E->Architectures.end(); ++A)
 	    {
-
+	       // available in templates
 	       std::map<std::string, std::string> Options;
 	       Options.insert(std::make_pair("SITE", Site));
 	       Options.insert(std::make_pair("RELEASE", Release));
@@ -152,10 +172,10 @@ static void GetIndexTargetsFor(char const * const Type, std::string const &URI, 
 		  Options.insert(std::make_pair("LANGUAGE", *L));
 	       if (tplMetaKey.find("$(ARCHITECTURE)") != std::string::npos)
 		  Options.insert(std::make_pair("ARCHITECTURE", *A));
-	       Options.insert(std::make_pair("BASE_URI", baseURI));
-	       Options.insert(std::make_pair("REPO_URI", URI));
-	       Options.insert(std::make_pair("TARGET_OF", "deb-src"));
-	       Options.insert(std::make_pair("CREATED_BY", *T));
+	       else if (tplMetaKey.find("$(NATIVE_ARCHITECTURE)") != std::string::npos)
+		  Options.insert(std::make_pair("ARCHITECTURE", NativeArch));
+	       if (tplMetaKey.find("$(NATIVE_ARCHITECTURE)") != std::string::npos)
+		  Options.insert(std::make_pair("NATIVE_ARCHITECTURE", NativeArch));
 
 	       std::string MetaKey = tplMetaKey;
 	       std::string ShortDesc = tplShortDesc;
@@ -166,6 +186,69 @@ static void GetIndexTargetsFor(char const * const Type, std::string const &URI, 
 		  ShortDesc = SubstVar(ShortDesc, std::string("$(") + O->first + ")", O->second);
 		  LongDesc = SubstVar(LongDesc, std::string("$(") + O->first + ")", O->second);
 	       }
+
+	       {
+		  auto const dup = std::find_if(IndexTargets.begin(), IndexTargets.end(), [&](IndexTarget const &IT) {
+		     return MetaKey == IT.MetaKey && baseURI == IT.Option(IndexTarget::BASE_URI) &&
+			E->sourcesEntry == IT.Option(IndexTarget::SOURCESENTRY) && *T == IT.Option(IndexTarget::CREATED_BY);
+		  });
+		  if (dup != IndexTargets.end())
+		  {
+		     if (tplMetaKey.find("$(ARCHITECTURE)") == std::string::npos)
+			break;
+		     continue;
+		  }
+	       }
+
+	       {
+		  auto const dup = std::find_if(IndexTargets.begin(), IndexTargets.end(), [&](IndexTarget const &IT) {
+		     return MetaKey == IT.MetaKey && baseURI == IT.Option(IndexTarget::BASE_URI) &&
+			E->sourcesEntry == IT.Option(IndexTarget::SOURCESENTRY) && *T != IT.Option(IndexTarget::CREATED_BY);
+		  });
+		  if (dup != IndexTargets.end())
+		  {
+		     std::string const dupT = dup->Option(IndexTarget::CREATED_BY);
+		     std::string const dupEntry = dup->Option(IndexTarget::SOURCESENTRY);
+		     //TRANSLATOR: an identifier like Packages; Releasefile key indicating
+		     // a file like main/binary-amd64/Packages; another identifier like Contents;
+		     // filename and linenumber of the sources.list entry currently parsed
+		     _error->Warning(_("Target %s wants to acquire the same file (%s) as %s from source %s"),
+			   T->c_str(), MetaKey.c_str(), dupT.c_str(), dupEntry.c_str());
+		     if (tplMetaKey.find("$(ARCHITECTURE)") == std::string::npos)
+			break;
+		     continue;
+		  }
+	       }
+
+	       {
+		  auto const dup = std::find_if(IndexTargets.begin(), IndexTargets.end(), [&](IndexTarget const &T) {
+		     return MetaKey == T.MetaKey && baseURI == T.Option(IndexTarget::BASE_URI) &&
+			E->sourcesEntry != T.Option(IndexTarget::SOURCESENTRY);
+		  });
+		  if (dup != IndexTargets.end())
+		  {
+		     std::string const dupEntry = dup->Option(IndexTarget::SOURCESENTRY);
+		     //TRANSLATOR: an identifier like Packages; Releasefile key indicating
+		     // a file like main/binary-amd64/Packages; filename and linenumber of
+		     // two sources.list entries
+		     _error->Warning(_("Target %s (%s) is configured multiple times in %s and %s"),
+			   T->c_str(), MetaKey.c_str(), dupEntry.c_str(), E->sourcesEntry.c_str());
+		     if (tplMetaKey.find("$(ARCHITECTURE)") == std::string::npos)
+			break;
+		     continue;
+		  }
+	       }
+
+	       // not available in templates, but in the indextarget
+	       Options.insert(std::make_pair("BASE_URI", baseURI));
+	       Options.insert(std::make_pair("REPO_URI", URI));
+	       Options.insert(std::make_pair("TARGET_OF", Type));
+	       Options.insert(std::make_pair("CREATED_BY", *T));
+	       Options.insert(std::make_pair("PDIFFS", UsePDiffs ? "yes" : "no"));
+	       Options.insert(std::make_pair("DEFAULTENABLED", DefaultEnabled ? "yes" : "no"));
+	       Options.insert(std::make_pair("COMPRESSIONTYPES", CompressionTypes));
+	       Options.insert(std::make_pair("SOURCESENTRY", E->sourcesEntry));
+
 	       IndexTarget Target(
 		     MetaKey,
 		     ShortDesc,
@@ -198,15 +281,17 @@ std::vector<IndexTarget> debReleaseIndex::GetIndexTargets() const
    return IndexTargets;
 }
 									/*}}}*/
-void debReleaseIndex::AddComponent(bool const isSrc, std::string const &Name,/*{{{*/
+void debReleaseIndex::AddComponent(std::string const &sourcesEntry,	/*{{{*/
+	 bool const isSrc, std::string const &Name,
 	 std::vector<std::string> const &Targets,
 	 std::vector<std::string> const &Architectures,
-	 std::vector<std::string> Languages)
+	 std::vector<std::string> Languages,
+	 bool const usePDiffs)
 {
    if (Languages.empty() == true)
       Languages.push_back("none");
    debReleaseIndexPrivate::debSectionEntry const entry = {
-      Name, Targets, Architectures, Languages
+      sourcesEntry, Name, Targets, Architectures, Languages, usePDiffs
    };
    if (isSrc)
       d->DebSrcEntries.push_back(entry);
@@ -420,10 +505,8 @@ bool debReleaseIndex::GetIndexes(pkgAcquire *Owner, bool const &GetAll)/*{{{*/
 #undef APT_TARGET
    // special case for --print-uris
    if (GetAll)
-   {
-      for (std::vector<IndexTarget>::const_iterator Target = targets.begin(); Target != targets.end(); ++Target)
-	 new pkgAcqIndex(Owner, TransactionManager, *Target);
-   }
+      for (auto const &Target: targets)
+	 new pkgAcqIndex(Owner, TransactionManager, Target);
 
    return true;
 }
@@ -511,17 +594,16 @@ std::vector <pkgIndexFile *> *debReleaseIndex::GetIndexFiles()		/*{{{*/
       return Indexes;
 
    Indexes = new std::vector<pkgIndexFile*>();
-   std::vector<IndexTarget> const Targets = GetIndexTargets();
    bool const istrusted = IsTrusted();
-   for (std::vector<IndexTarget>::const_iterator T = Targets.begin(); T != Targets.end(); ++T)
+   for (auto const &T: GetIndexTargets())
    {
-      std::string const TargetName = T->Option(IndexTarget::CREATED_BY);
+      std::string const TargetName = T.Option(IndexTarget::CREATED_BY);
       if (TargetName == "Packages")
-	 Indexes->push_back(new debPackagesIndex(*T, istrusted));
+	 Indexes->push_back(new debPackagesIndex(T, istrusted));
       else if (TargetName == "Sources")
-	 Indexes->push_back(new debSourcesIndex(*T, istrusted));
+	 Indexes->push_back(new debSourcesIndex(T, istrusted));
       else if (TargetName == "Translations")
-	 Indexes->push_back(new debTranslationsIndex(*T));
+	 Indexes->push_back(new debTranslationsIndex(T));
    }
    return Indexes;
 }
@@ -647,20 +729,17 @@ static std::vector<std::string> parsePlusMinusOptions(std::string const &Name, /
 
    if ((val = Options.find(Name + "+")) != Options.end())
    {
-      std::vector<std::string> const plusArch = VectorizeString(val->second, ',');
-      for (std::vector<std::string>::const_iterator plus = plusArch.begin(); plus != plusArch.end(); ++plus)
-	 if (std::find(Values.begin(), Values.end(), *plus) == Values.end())
-	    Values.push_back(*plus);
+      std::vector<std::string> const plus = VectorizeString(val->second, ',');
+      std::copy_if(plus.begin(), plus.end(), std::back_inserter(Values), [&Values](std::string const &v) {
+	 return std::find(Values.begin(), Values.end(), v) == Values.end();
+      });
    }
    if ((val = Options.find(Name + "-")) != Options.end())
    {
-      std::vector<std::string> const minusArch = VectorizeString(val->second, ',');
-      for (std::vector<std::string>::const_iterator minus = minusArch.begin(); minus != minusArch.end(); ++minus)
-      {
-	 std::vector<std::string>::iterator kill = std::find(Values.begin(), Values.end(), *minus);
-	 if (kill != Values.end())
-	    Values.erase(kill);
-      }
+      std::vector<std::string> const minus = VectorizeString(val->second, ',');
+      Values.erase(std::remove_if(Values.begin(), Values.end(), [&minus](std::string const &v) {
+	 return std::find(minus.begin(), minus.end(), v) != minus.end();
+      }), Values.end());
    }
    return Values;
 }
@@ -715,12 +794,44 @@ class APT_HIDDEN debSLTypeDebian : public pkgSourceList::Type		/*{{{*/
 	 List.push_back(Deb);
       }
 
+      std::vector<std::string> const alltargets = _config->FindVector(std::string("Acquire::IndexTargets::") + Name, "", true);
+      std::vector<std::string> deftargets;
+      deftargets.reserve(alltargets.size());
+      std::copy_if(alltargets.begin(), alltargets.end(), std::back_inserter(deftargets), [&](std::string const &t) {
+	 std::string c = "Acquire::IndexTargets::";
+	 c.append(Name).append("::").append(t).append("::DefaultEnabled");
+	 return _config->FindB(c, true);
+      });
+      std::vector<std::string> mytargets = parsePlusMinusOptions("target", Options, deftargets);
+      for (auto const &target : alltargets)
+      {
+	 std::map<std::string, std::string>::const_iterator const opt = Options.find(target);
+	 if (opt == Options.end())
+	    continue;
+	 auto const tarItr = std::find(mytargets.begin(), mytargets.end(), target);
+	 bool const optValue = StringToBool(opt->second);
+	 if (optValue == true && tarItr == mytargets.end())
+	    mytargets.push_back(target);
+	 else if (optValue == false && tarItr != mytargets.end())
+	    mytargets.erase(std::remove(mytargets.begin(), mytargets.end(), target), mytargets.end());
+      }
+
+      bool UsePDiffs = _config->FindB("Acquire::PDiffs", true);
+      {
+	 std::map<std::string, std::string>::const_iterator const opt = Options.find("pdiffs");
+	 if (opt != Options.end())
+	    UsePDiffs = StringToBool(opt->second);
+      }
+
+      auto const entry = Options.find("sourceslist-entry");
       Deb->AddComponent(
+	    entry->second,
 	    IsSrc,
 	    Section,
-	    parsePlusMinusOptions("target", Options, _config->FindVector(std::string("Acquire::IndexTargets::") + Name, "", true)),
+	    mytargets,
 	    parsePlusMinusOptions("arch", Options, APT::Configuration::getArchitectures()),
-	    parsePlusMinusOptions("lang", Options, APT::Configuration::getLanguages(true))
+	    parsePlusMinusOptions("lang", Options, APT::Configuration::getLanguages(true)),
+	    UsePDiffs
 	    );
 
       if (Deb->SetTrusted(GetTriStateOption(Options, "trusted")) == false ||

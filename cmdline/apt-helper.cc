@@ -22,6 +22,7 @@
 #include <apt-private/private-output.h>
 #include <apt-private/private-download.h>
 #include <apt-private/private-cmndline.h>
+#include <apt-pkg/srvrec.h>
 
 #include <iostream>
 #include <string>
@@ -67,9 +68,6 @@ static bool DoDownloadFile(CommandLine &CmdL)
       fileind += 3;
    }
 
-   // Disable drop-privs if "_apt" can not write to the target dir
-   CheckDropPrivsMustBeDisabled(Fetcher);
-
    bool Failed = false;
    if (AcquireRun(Fetcher, 0, &Failed, NULL) == false || Failed == true)
       return _error->Error(_("Download Failed"));
@@ -78,6 +76,33 @@ static bool DoDownloadFile(CommandLine &CmdL)
 	 if (FileExists(*f) == false)
 	    return _error->Error(_("Download Failed"));
 
+   return true;
+}
+
+static bool DoSrvLookup(CommandLine &CmdL)
+{
+   if (CmdL.FileSize() < 1)
+      return _error->Error("Must specify at least one SRV record");
+
+   for(size_t i = 1; CmdL.FileList[i] != NULL; ++i)
+   {
+      std::vector<SrvRec> srv_records;
+      std::string const name = CmdL.FileList[i];
+      c0out << "# Target\tPriority\tWeight\tPort # for " << name << std::endl;
+      size_t const found = name.find(":");
+      if (found != std::string::npos)
+      {
+	 std::string const host = name.substr(0, found);
+	 size_t const port = atoi(name.c_str() + found + 1);
+	 if(GetSrvRecords(host, port, srv_records) == false)
+	    _error->Warning(_("GetSrvRec failed for %s"), name.c_str());
+      }
+      else if(GetSrvRecords(name, srv_records) == false)
+	 _error->Warning(_("GetSrvRec failed for %s"), name.c_str());
+
+      for (SrvRec const &I : srv_records)
+	 c1out << I.target << "\t" << I.priority << "\t" << I.weight << "\t" << I.port << std::endl;
+   }
    return true;
 }
 
@@ -96,6 +121,7 @@ static bool ShowHelp(CommandLine &)
       "\n"
       "Commands:\n"
       "   download-file - download the given uri to the target-path\n"
+      "   srv-lookup - lookup a SRV record (e.g. _http._tcp.ftp.debian.org)\n"
       "   auto-detect-proxy - detect proxy using apt.conf\n"
       "\n"
       "                       This APT helper has Super Meep Powers.\n");
@@ -107,6 +133,7 @@ int main(int argc,const char *argv[])					/*{{{*/
 {
    CommandLine::Dispatch Cmds[] = {{"help",&ShowHelp},
 				   {"download-file", &DoDownloadFile},
+				   {"srv-lookup", &DoSrvLookup},
 				   {"auto-detect-proxy", &DoAutoDetectProxy},
                                    {0,0}};
 

@@ -222,7 +222,24 @@ deb-src [ option1=value1 option2=value2 ] uri suite [component1] [component2] [.
 		which download targets apt will try to acquire from this
 		source. If not specified, the default set is defined by the
 		<option>Acquire::IndexTargets</option> configuration scope.
+		Aditionally, specific targets can be enabled or disabled by
+		using the identifier as field name instead of using this
+		multivalue option.
 	  </para></listitem>
+
+	  <listitem><para><option>PDiffs</option> (<option>pdiffs</option>)
+		is a yes/no value which controls if APT should try to use PDiffs
+		to update old indexes instead of downloading the new indexes
+		entirely. The value of this option is ignored if the repository
+		doesn't announce the availability of PDiffs.  Defaults to the
+		value of the option with the same name for a specific index file
+		defined in the <option>Acquire::IndexTargets</option> scope,
+		which itself default to the value of configuration option
+		<option>Acquire::PDiffs</option> which defaults to
+		<literal>yes</literal>.
+	  </para></listitem>
+
+
        </itemizedlist>
 
        Further more, there are options which if set effect
@@ -264,14 +281,14 @@ deb-src [ option1=value1 option2=value2 ] uri suite [component1] [component2] [.
 	  </para></listitem>
 
 	  <listitem><para><option>Valid-Until-Min</option>
-		(<option>check-valid-min</option>) and
+		(<option>valid-until-min</option>) and
 		<option>Valid-Until-Max</option>
 		(<option>valid-until-max</option>) can be used to raise or
 		lower the time period in seconds in which the data from this
 		repository is considered valid. -Max can be especially useful
 		if the repository provides no Valid-Until field on its Release
 		file to set your own value, while -Min can be used to increase
-		the valid time on seldomly updated (local) mirrors of a more
+		the valid time on seldom updated (local) mirrors of a more
 		frequently updated but less accessible archive (which is in the
 		sources.list as well) instead of disabling the check entirely.
 		Default to the value of the configuration options

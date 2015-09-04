@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
 #include <dirent.h>
@@ -446,8 +447,72 @@ void pkgAcquire::RunFds(fd_set *RSet,fd_set *WSet)
 /* This runs the queues. It manages a select loop for all of the
    Worker tasks. The workers interact with the queues and items to
    manage the actual fetch. */
+static void CheckDropPrivsMustBeDisabled(pkgAcquire const &Fetcher)
+{
+   if(getuid() != 0)
+      return;
+
+   std::string SandboxUser = _config->Find("APT::Sandbox::User");
+   if (SandboxUser.empty())
+      return;
+
+   struct passwd const * const pw = getpwnam(SandboxUser.c_str());
+   if (pw == NULL)
+      return;
+
+   gid_t const old_euid = geteuid();
+   gid_t const old_egid = getegid();
+   if (setegid(pw->pw_gid) != 0)
+      _error->Errno("setegid", "setegid %u failed", pw->pw_gid);
+   if (seteuid(pw->pw_uid) != 0)
+      _error->Errno("seteuid", "seteuid %u failed", pw->pw_uid);
+
+   bool dropPrivs = true;
+   for (pkgAcquire::ItemCIterator I = Fetcher.ItemsBegin();
+	I != Fetcher.ItemsEnd() && dropPrivs == true; ++I)
+   {
+      std::string filename = (*I)->DestFile;
+      if (filename.empty())
+	 continue;
+
+      // no need to drop privileges for a complete file
+      if ((*I)->Complete == true)
+	 continue;
+
+      // we check directory instead of file as the file might or might not
+      // exist already as a link or not which complicates everything…
+      std::string dirname = flNotFile(filename);
+      if (unlikely(dirname.empty()))
+	 continue;
+      // translate relative to absolute for DirectoryExists
+      // FIXME: What about ../ and ./../ ?
+      if (dirname.substr(0,2) == "./")
+	 dirname = SafeGetCWD() + dirname.substr(2);
+
+      if (DirectoryExists(dirname))
+	 ;
+      else
+	 continue; // assume it is created correctly by the acquire system
+
+      if (faccessat(-1, dirname.c_str(), R_OK | W_OK | X_OK, AT_EACCESS | AT_SYMLINK_NOFOLLOW) != 0)
+      {
+	 dropPrivs = false;
+	 _error->WarningE("pkgAcquire::Run", _("Can't drop privileges for downloading as file '%s' couldn't be accessed by user '%s'."),
+	       filename.c_str(), SandboxUser.c_str());
+	 _config->Set("APT::Sandbox::User", "");
+	 break;
+      }
+   }
+
+   if (seteuid(old_euid) != 0)
+      _error->Errno("seteuid", "seteuid %u failed", old_euid);
+   if (setegid(old_egid) != 0)
+      _error->Errno("setegid", "setegid %u failed", old_egid);
+}
 pkgAcquire::RunResult pkgAcquire::Run(int PulseIntervall)
 {
+   CheckDropPrivsMustBeDisabled(*this);
+
    Running = true;
    
    for (Queue *I = Queues; I != 0; I = I->Next)

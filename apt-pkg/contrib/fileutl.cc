@@ -2006,12 +2006,13 @@ bool FileFd::Close()
    {
       if ((Flags & Compressed) != Compressed && iFd > 0 && close(iFd) != 0)
 	 Res &= _error->Errno("close",_("Problem closing the file %s"), FileName.c_str());
-      if (d != NULL)
-      {
-	 Res &= d->CloseDown(FileName);
-	 delete d;
-	 d = NULL;
-      }
+   }
+
+   if (d != NULL)
+   {
+      Res &= d->CloseDown(FileName);
+      delete d;
+      d = NULL;
    }
 
    if ((Flags & Replace) == Replace) {
@@ -2122,12 +2123,39 @@ std::string GetTempDir()						/*{{{*/
 
    struct stat st;
    if (!tmpdir || strlen(tmpdir) == 0 || // tmpdir is set
-	 stat(tmpdir, &st) != 0 || (st.st_mode & S_IFDIR) == 0 || // exists and is directory
-	 access(tmpdir, R_OK | W_OK | X_OK) != 0 // current user has rwx access to directory
-      )
+	 stat(tmpdir, &st) != 0 || (st.st_mode & S_IFDIR) == 0) // exists and is directory
+      tmpdir = "/tmp";
+   else if (geteuid() != 0 && // root can do everything anyway
+	 faccessat(-1, tmpdir, R_OK | W_OK | X_OK, AT_EACCESS | AT_SYMLINK_NOFOLLOW) != 0) // current user has rwx access to directory
       tmpdir = "/tmp";
 
    return string(tmpdir);
+}
+std::string GetTempDir(std::string const &User)
+{
+   // no need/possibility to drop privs
+   if(getuid() != 0 || User.empty() || User == "root")
+      return GetTempDir();
+
+   struct passwd const * const pw = getpwnam(User.c_str());
+   if (pw == NULL)
+      return GetTempDir();
+
+   gid_t const old_euid = geteuid();
+   gid_t const old_egid = getegid();
+   if (setegid(pw->pw_gid) != 0)
+      _error->Errno("setegid", "setegid %u failed", pw->pw_gid);
+   if (seteuid(pw->pw_uid) != 0)
+      _error->Errno("seteuid", "seteuid %u failed", pw->pw_uid);
+
+   std::string const tmp = GetTempDir();
+
+   if (seteuid(old_euid) != 0)
+      _error->Errno("seteuid", "seteuid %u failed", old_euid);
+   if (setegid(old_egid) != 0)
+      _error->Errno("setegid", "setegid %u failed", old_egid);
+
+   return tmp;
 }
 									/*}}}*/
 FileFd* GetTempFile(std::string const &Prefix, bool ImmediateUnlink, FileFd * const TmpFd)	/*{{{*/

@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+verify_by_hash() {
+    for hash_gen in SHA1:sha1sum SHA256:sha256sum SHA512:sha512sum; do
+        hash=$(echo ${hash_gen} | cut -f1 -d:)
+        gen=$(echo ${hash_gen} | cut -f2 -d:)
+        testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/$hash/$($gen aptarchive/dists/unstable/main/binary-i386/Packages | cut -f1 -d' ')
+        testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/$hash/$($gen aptarchive/dists/unstable/main/binary-i386/Packages.gz | cut -f1 -d' ')
+    done
+}
+
 #
 # main()
 #
@@ -8,15 +17,16 @@ TESTDIR=$(readlink -f $(dirname $0))
 . $TESTDIR/framework
 setupenvironment
 configarchitecture 'i386'
+configcompression 'gz' '.'
 
 # build one pacakge
 buildsimplenativepackage 'foo' 'i386' '1' 'unstable'
 buildaptarchivefromincoming
 
-# verify
-testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages)
-testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages.gz)
-
+# verify initial run
+verify_by_hash
+previous_hash=$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages | cut -f1 -d' ')
+echo $previous_hash
 
 # insert new package
 buildsimplenativepackage 'bar' 'i386' '1' 'unstable'
@@ -27,8 +37,10 @@ buildaptarchivefromincoming
 testsuccess zgrep "Package: bar" aptarchive/dists/unstable/main/binary-i386/Packages.gz
 
 # ensure we have the by-hash stuff
-testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages)
-testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$(sha256sum aptarchive/dists/unstable/main/binary-i386/Packages.gz)
+verify_by_hash
+
+# ensure the old hash is still there
+testsuccess stat aptarchive/dists/unstable/main/binary-i386/by-hash/SHA256/$previous_hash
 
 # ensure we have it in the Release file
 testsuccess grep "Acquire-By-Hash: true" aptarchive/dists/unstable/*Release

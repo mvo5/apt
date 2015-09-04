@@ -107,6 +107,7 @@ bool pkgSourceList::Type::ParseStanza(vector<metaIndex *> &List,	/*{{{*/
    mapping.insert(std::make_pair("Valid-Until-Min", std::make_pair("valid-until-min", false)));
    mapping.insert(std::make_pair("Valid-Until-Max", std::make_pair("valid-until-max", false)));
    mapping.insert(std::make_pair("Signed-By", std::make_pair("signed-by", false)));
+   mapping.insert(std::make_pair("PDiffs", std::make_pair("pdiffs", false)));
 
    for (std::map<char const * const, std::pair<char const * const, bool> >::const_iterator m = mapping.begin(); m != mapping.end(); ++m)
       if (Tags.Exists(m->first))
@@ -117,6 +118,12 @@ bool pkgSourceList::Type::ParseStanza(vector<metaIndex *> &List,	/*{{{*/
 	    std::replace(option.begin(), option.end(), ' ', ',');
 	 Options[m->second.first] = option;
       }
+
+   {
+      std::string entry;
+      strprintf(entry, "%s:%i", Fd.Name().c_str(), i);
+      Options["sourceslist-entry"] = entry;
+   }
 
    // now create one item per suite/section
    string Suite = Tags.FindS("Suites");
@@ -185,6 +192,11 @@ bool pkgSourceList::Type::ParseLine(vector<metaIndex *> &List,
    // Parse option field if it exists
    // e.g.: [ option1=value1 option2=value2 ]
    map<string, string> Options;
+   {
+      std::string entry;
+      strprintf(entry, "%s:%i", File.c_str(), CurLine);
+      Options["sourceslist-entry"] = entry;
+   }
    if (Buffer != 0 && Buffer[0] == '[')
    {
       ++Buffer; // ignore the [
@@ -321,7 +333,7 @@ void pkgSourceList::Reset()
 {
    for (const_iterator I = SrcList.begin(); I != SrcList.end(); ++I)
       delete *I;
-   SrcList.erase(SrcList.begin(),SrcList.end());
+   SrcList.clear();
 }
 									/*}}}*/
 // SourceList::Read - Parse the sourcelist file				/*{{{*/
@@ -384,7 +396,7 @@ bool pkgSourceList::ParseFileOldStyle(std::string const &File)
 	 continue;
 
       // Grok it
-      std::string const LineType = Buffer.substr(0, Buffer.find(' '));
+      std::string const LineType = Buffer.substr(0, Buffer.find_first_of(" \t\v"));
       if (LineType.empty() || LineType == Buffer)
 	 return _error->Error(_("Malformed line %u in source list %s (type)"),CurLine,File.c_str());
 
@@ -440,34 +452,26 @@ bool pkgSourceList::ParseFileDeb822(string const &File)
 }
 									/*}}}*/
 // SourceList::FindIndex - Get the index associated with a file		/*{{{*/
-// ---------------------------------------------------------------------
-/* */
+static bool FindInIndexFileContainer(std::vector<pkgIndexFile *> const &Cont, pkgCache::PkgFileIterator const &File, pkgIndexFile *&Found)
+{
+   auto const J = std::find_if(Cont.begin(), Cont.end(), [&File](pkgIndexFile const * const J) {
+	 return J->FindInCache(*File.Cache()) == File;
+   });
+   if (J != Cont.end())
+   {
+      Found = (*J);
+      return true;
+   }
+   return false;
+}
 bool pkgSourceList::FindIndex(pkgCache::PkgFileIterator File,
 			      pkgIndexFile *&Found) const
 {
    for (const_iterator I = SrcList.begin(); I != SrcList.end(); ++I)
-   {
-      vector<pkgIndexFile *> *Indexes = (*I)->GetIndexFiles();
-      for (vector<pkgIndexFile *>::const_iterator J = Indexes->begin();
-	   J != Indexes->end(); ++J)
-      {
-         if ((*J)->FindInCache(*File.Cache()) == File)
-         {
-            Found = (*J);
-            return true;
-         }
-      }
-   }
-   for (vector<pkgIndexFile *>::const_iterator J = VolatileFiles.begin();
-	 J != VolatileFiles.end(); ++J)
-   {
-      if ((*J)->FindInCache(*File.Cache()) == File)
-      {
-	 Found = (*J);
+      if (FindInIndexFileContainer(*(*I)->GetIndexFiles(), File, Found))
 	 return true;
-      }
-   }
-   return false;
+
+   return FindInIndexFileContainer(VolatileFiles, File, Found);
 }
 									/*}}}*/
 // SourceList::GetIndexes - Load the index files into the downloader	/*{{{*/
@@ -516,11 +520,12 @@ time_t pkgSourceList::GetLastModifiedTime()
       List = GetListOfFilesInDir(Parts, "list", true);
 
    // calculate the time
-   time_t mtime_sources = GetModificationTime(Main);
-   for (vector<string>::const_iterator I = List.begin(); I != List.end(); ++I)
-      mtime_sources = std::max(mtime_sources, GetModificationTime(*I));
-
-   return mtime_sources;
+   std::vector<time_t> modtimes;
+   modtimes.reserve(1 + List.size());
+   modtimes.push_back(GetModificationTime(Main));
+   std::transform(List.begin(), List.end(), std::back_inserter(modtimes), GetModificationTime);
+   auto const maxmtime = std::max_element(modtimes.begin(), modtimes.end());
+   return *maxmtime;
 }
 									/*}}}*/
 std::vector<pkgIndexFile*> pkgSourceList::GetVolatileFiles() const	/*{{{*/

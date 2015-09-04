@@ -47,8 +47,12 @@ testsuccessequal "'http://localhost:8080/main/f/foo/foo_1.0.changelog' foo.chang
 'http://localhost:8080/main/libb/libbar/libbar_1.0.changelog' libbar.changelog" aptget changelog foo libbar --print-uris -o Acquire::Changelogs::URI::Override::Label::Debian='http://localhost:8080/CHANGEPATH.changelog'
 
 releasechanger 'Changelogs' 'no'
-testequal 'E: Failed to fetch changelog:/foo.changelog  Changelog unavailable for foo=1.0
-' aptget changelog foo -qq -d
+if [ "$(id -u)" = '0' ]; then
+	testfailuremsg "W: Can't drop privileges for downloading as file 'foo.changelog' couldn't be accessed by user '_apt'. - pkgAcquire::Run (13: Permission denied)
+E: Failed to fetch changelog:/foo.changelog  Changelog unavailable for foo=1.0" aptget changelog foo -d
+else
+	testfailuremsg 'E: Failed to fetch changelog:/foo.changelog  Changelog unavailable for foo=1.0' aptget changelog foo -d
+fi
 
 sed -i '/^Changelogs: / d' $(find rootdir/var/lib/apt/lists -name '*Release')
 releasechanger 'Label' 'Testcases'
@@ -60,14 +64,15 @@ testsuccessequal "'http://localhost:8080/main/f/foo/foo_1.0/change.txt' foo.chan
 echo 'Acquire::Changelogs::URI::Label::Testcases "http://localhost:8080/pool/CHANGEPATH/changelog";' > rootdir/etc/apt/apt.conf.d/changelog.conf
 testsuccessequal "'http://localhost:8080/pool/main/f/foo/foo_1.0/changelog' foo.changelog" aptget changelog foo --print-uris
 
-cd downloaded
 
 testsuccess aptget changelog foo -qq
-testfileequal '../rootdir/tmp/testsuccess.output' "$(cat ../aptarchive/pool/main/f/foo/foo_1.0/changelog)"
+testfileequal 'rootdir/tmp/testsuccess.output' "$(cat aptarchive/pool/main/f/foo/foo_1.0/changelog)"
 
 testsuccess aptget changelog foo libbar -qq
-testfileequal '../rootdir/tmp/testsuccess.output' "$(cat ../aptarchive/pool/main/f/foo/foo_1.0/changelog)
-$(cat ../aptarchive/pool/main/libb/libbar/libbar_1.0/changelog)"
+testfileequal 'rootdir/tmp/testsuccess.output' "$(cat aptarchive/pool/main/f/foo/foo_1.0/changelog)
+$(cat aptarchive/pool/main/libb/libbar/libbar_1.0/changelog)"
+
+cd downloaded
 
 testsuccess aptget changelog foo -d
 testfilestats 'foo.changelog' '%U:%G:%a' '=' "${TEST_DEFAULT_USER}:${TEST_DEFAULT_GROUP}:644"

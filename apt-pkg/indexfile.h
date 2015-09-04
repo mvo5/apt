@@ -85,8 +85,13 @@ class IndexTarget							/*{{{*/
       TARGET_OF,
       FILENAME,
       EXISTING_FILENAME,
+      PDIFFS,
+      COMPRESSIONTYPES,
+      DEFAULTENABLED,
+      SOURCESENTRY,
    };
    std::string Option(OptionKeys const Key) const;
+   bool OptionBool(OptionKeys const Key) const;
    std::string Format(std::string format) const;
 };
 									/*}}}*/

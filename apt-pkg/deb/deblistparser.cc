@@ -362,7 +362,7 @@ unsigned short debListParser::VersionHash()
    return Result;
 }
 									/*}}}*/
-// ListParser::ParseStatus - Parse the status field			/*{{{*/
+// StatusListParser::ParseStatus - Parse the status field		/*{{{*/
 // ---------------------------------------------------------------------
 /* Status lines are of the form,
      Status: want flag status
@@ -371,7 +371,12 @@ unsigned short debListParser::VersionHash()
    status = not-installed, config-files, half-installed, unpacked,
             half-configured, triggers-awaited, triggers-pending, installed
  */
-bool debListParser::ParseStatus(pkgCache::PkgIterator &Pkg,
+bool debListParser::ParseStatus(pkgCache::PkgIterator &,
+				pkgCache::VerIterator &)
+{
+   return true;
+}
+bool debStatusListParser::ParseStatus(pkgCache::PkgIterator &Pkg,
 				pkgCache::VerIterator &Ver)
 {
    const char *Start;

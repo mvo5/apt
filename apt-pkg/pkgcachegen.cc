@@ -572,21 +572,31 @@ bool pkgCacheGenerator::NewPackage(pkgCache::PkgIterator &Pkg,const string &Name
       if (APT::Configuration::checkArchitecture(Pkg.Arch()) == true)
       {
 	 pkgCache::PkgIterator const M = Grp.FindPreferredPkg(false); // native or any foreign pkg will do
-	 if (M.end() == false)
-	    for (pkgCache::PrvIterator Prv = M.ProvidesList(); Prv.end() == false; ++Prv)
+	 if (M.end() == false) {
+	    pkgCache::PrvIterator Prv;
+	    Dynamic<pkgCache::PrvIterator> DynPrv(Prv);
+	    for (Prv = M.ProvidesList(); Prv.end() == false; ++Prv)
 	    {
 	       if ((Prv->Flags & pkgCache::Flag::ArchSpecific) != 0)
 		  continue;
 	       pkgCache::VerIterator Ver = Prv.OwnerVer();
+	       Dynamic<pkgCache::VerIterator> DynVer(Ver);
 	       if ((Ver->MultiArch & pkgCache::Version::Allowed) == pkgCache::Version::Allowed ||
 	           ((Ver->MultiArch & pkgCache::Version::Foreign) == pkgCache::Version::Foreign &&
 			(Prv->Flags & pkgCache::Flag::MultiArchImplicit) == 0))
 		  if (NewProvides(Ver, Pkg, Prv->ProvideVersion, Prv->Flags) == false)
 		     return false;
 	    }
+	 }
 
-	 for (pkgCache::PkgIterator P = Grp.PackageList(); P.end() == false;  P = Grp.NextPkg(P))
-	    for (pkgCache::VerIterator Ver = P.VersionList(); Ver.end() == false; ++Ver)
+
+	 pkgCache::PkgIterator P;
+	 pkgCache::VerIterator Ver;
+	 Dynamic<pkgCache::PkgIterator> DynP(P);
+	 Dynamic<pkgCache::VerIterator> DynVer(Ver);
+
+	 for (P = Grp.PackageList(); P.end() == false;  P = Grp.NextPkg(P))
+	    for (Ver = P.VersionList(); Ver.end() == false; ++Ver)
 	       if ((Ver->MultiArch & pkgCache::Version::Foreign) == pkgCache::Version::Foreign)
 		  if (NewProvides(Ver, Pkg, Ver->VerStr, pkgCache::Flag::MultiArchImplicit) == false)
 		     return false;
@@ -594,8 +604,10 @@ bool pkgCacheGenerator::NewPackage(pkgCache::PkgIterator &Pkg,const string &Name
       // and negative dependencies, don't forget negative dependencies
       {
 	 pkgCache::PkgIterator const M = Grp.FindPreferredPkg(false);
-	 if (M.end() == false)
-	    for (pkgCache::DepIterator Dep = M.RevDependsList(); Dep.end() == false; ++Dep)
+	 if (M.end() == false) {
+	    pkgCache::DepIterator Dep;
+	    Dynamic<pkgCache::DepIterator> DynDep(Dep);
+	    for (Dep = M.RevDependsList(); Dep.end() == false; ++Dep)
 	    {
 	       if ((Dep->CompareOp & (pkgCache::Dep::ArchSpecific | pkgCache::Dep::MultiArchImplicit)) != 0)
 		  continue;
@@ -603,10 +615,12 @@ bool pkgCacheGenerator::NewPackage(pkgCache::PkgIterator &Pkg,const string &Name
 		     Dep->Type != pkgCache::Dep::Replaces)
 		  continue;
 	       pkgCache::VerIterator Ver = Dep.ParentVer();
+	       Dynamic<pkgCache::VerIterator> DynVer(Ver);
 	       map_pointer_t * unused = NULL;
 	       if (NewDepends(Pkg, Ver, Dep->Version, Dep->CompareOp, Dep->Type, unused) == false)
 		  return false;
 	    }
+	 }
       }
 
       // this package is the new last package
@@ -1071,7 +1085,9 @@ bool pkgCacheGenerator::NewProvides(pkgCache::VerIterator &Ver,
 bool pkgCacheListParser::NewProvidesAllArch(pkgCache::VerIterator &Ver, string const &Package,
 				string const &Version, uint8_t const Flags) {
    pkgCache &Cache = Owner->Cache;
-   pkgCache::GrpIterator const Grp = Cache.FindGrp(Package);
+   pkgCache::GrpIterator Grp = Cache.FindGrp(Package);
+   Dynamic<pkgCache::GrpIterator> DynGrp(Grp);
+
    if (Grp.end() == true)
       return NewProvides(Ver, Package, Cache.NativeArch(), Version, Flags);
    else
@@ -1085,8 +1101,11 @@ bool pkgCacheListParser::NewProvidesAllArch(pkgCache::VerIterator &Ver, string c
 
       bool const isImplicit = (Flags & pkgCache::Flag::MultiArchImplicit) == pkgCache::Flag::MultiArchImplicit;
       bool const isArchSpecific = (Flags & pkgCache::Flag::ArchSpecific) == pkgCache::Flag::ArchSpecific;
-      pkgCache::PkgIterator const OwnerPkg = Ver.ParentPkg();
-      for (pkgCache::PkgIterator Pkg = Grp.PackageList(); Pkg.end() == false; Pkg = Grp.NextPkg(Pkg))
+      pkgCache::PkgIterator OwnerPkg = Ver.ParentPkg();
+      Dynamic<pkgCache::PkgIterator> DynOwnerPkg(OwnerPkg);
+      pkgCache::PkgIterator Pkg;
+      Dynamic<pkgCache::PkgIterator> DynPkg(Pkg);
+      for (Pkg = Grp.PackageList(); Pkg.end() == false; Pkg = Grp.NextPkg(Pkg))
       {
 	 if (isImplicit && OwnerPkg == Pkg)
 	    continue;
@@ -1497,8 +1516,9 @@ APT_DEPRECATED bool pkgMakeStatusCache(pkgSourceList &List,OpProgress &Progress,
 			MMap **OutMap, bool AllowMem)
    { return pkgCacheGenerator::MakeStatusCache(List, &Progress, OutMap, AllowMem); }
 bool pkgCacheGenerator::MakeStatusCache(pkgSourceList &List,OpProgress *Progress,
-			MMap **OutMap,bool AllowMem)
+			MMap **OutMap,bool)
 {
+   // FIXME: deprecate the ignored AllowMem parameter
    bool const Debug = _config->FindB("Debug::pkgCacheGen", false);
 
    std::vector<pkgIndexFile *> Files;
@@ -1563,16 +1583,6 @@ bool pkgCacheGenerator::MakeStatusCache(pkgSourceList &List,OpProgress *Progress
 
       if (Debug == true)
 	 std::clog << "Do we have write-access to the cache files? " << (Writeable ? "YES" : "NO") << std::endl;
-
-      if (Writeable == false && AllowMem == false)
-      {
-	 if (CacheFile.empty() == false)
-	    return _error->Error(_("Unable to write to %s"),flNotFile(CacheFile).c_str());
-	 else if (SrcCacheFile.empty() == false)
-	    return _error->Error(_("Unable to write to %s"),flNotFile(SrcCacheFile).c_str());
-	 else
-	    return _error->Error("Unable to create caches as file usage is disabled, but memory not allowed either!");
-      }
    }
 
    // At this point we know we need to construct something, so get storage ready

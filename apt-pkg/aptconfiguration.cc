@@ -74,8 +74,8 @@ const Configuration::getCompressionTypes(bool const &Cached) {
 	}
 
 	// setup the defaults for the compressiontypes => method mapping
-	_config->CndSet("Acquire::CompressionTypes::bz2","bzip2");
 	_config->CndSet("Acquire::CompressionTypes::xz","xz");
+	_config->CndSet("Acquire::CompressionTypes::bz2","bzip2");
 	_config->CndSet("Acquire::CompressionTypes::lzma","lzma");
 	_config->CndSet("Acquire::CompressionTypes::gz","gzip");
 
@@ -94,11 +94,9 @@ const Configuration::getCompressionTypes(bool const &Cached) {
 			continue;
 		// ignore types we have no app ready to use
 		std::string const app = _config->Find(method);
-		std::vector<APT::Configuration::Compressor>::const_iterator c = compressors.begin();
-		for (; c != compressors.end(); ++c)
-			if (c->Name == app)
-				break;
-		if (c == compressors.end())
+		if (std::find_if(compressors.begin(), compressors.end(), [&app](APT::Configuration::Compressor const &c) {
+				return c.Name == app;
+			}) == compressors.end())
 			continue;
 		types.push_back(*o);
 	}
@@ -115,11 +113,9 @@ const Configuration::getCompressionTypes(bool const &Cached) {
 		if (std::find(types.begin(),types.end(),Types->Tag) != types.end())
 			continue;
 		// ignore types we have no app ready to use
-		std::vector<APT::Configuration::Compressor>::const_iterator c = compressors.begin();
-		for (; c != compressors.end(); ++c)
-			if (c->Name == Types->Value)
-				break;
-		if (c == compressors.end())
+		if (std::find_if(compressors.begin(), compressors.end(), [&Types](APT::Configuration::Compressor const &c) {
+				return c.Name == Types->Value;
+			}) == compressors.end())
 			continue;
 		types.push_back(Types->Tag);
 	}
@@ -453,17 +449,17 @@ const Configuration::getCompressors(bool const Cached) {
 	else
 		compressors.push_back(Compressor("gzip",".gz","false", NULL, NULL, 2));
 #endif
-	if (_config->Exists("Dir::Bin::bzip2") == false || FileExists(_config->FindFile("Dir::Bin::bzip2")) == true)
-		compressors.push_back(Compressor("bzip2",".bz2","bzip2","-9","-d",3));
-#ifdef HAVE_BZ2
-	else
-		compressors.push_back(Compressor("bzip2",".bz2","false", NULL, NULL, 3));
-#endif
 	if (_config->Exists("Dir::Bin::xz") == false || FileExists(_config->FindFile("Dir::Bin::xz")) == true)
-		compressors.push_back(Compressor("xz",".xz","xz","-6","-d",4));
+		compressors.push_back(Compressor("xz",".xz","xz","-6","-d",3));
 #ifdef HAVE_LZMA
 	else
-		compressors.push_back(Compressor("xz",".xz","false", NULL, NULL, 4));
+		compressors.push_back(Compressor("xz",".xz","false", NULL, NULL, 3));
+#endif
+	if (_config->Exists("Dir::Bin::bzip2") == false || FileExists(_config->FindFile("Dir::Bin::bzip2")) == true)
+		compressors.push_back(Compressor("bzip2",".bz2","bzip2","-9","-d",4));
+#ifdef HAVE_BZ2
+	else
+		compressors.push_back(Compressor("bzip2",".bz2","false", NULL, NULL, 4));
 #endif
 	if (_config->Exists("Dir::Bin::lzma") == false || FileExists(_config->FindFile("Dir::Bin::lzma")) == true)
 		compressors.push_back(Compressor("lzma",".lzma","lzma","-9","-d",5));
