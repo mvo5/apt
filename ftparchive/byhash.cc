@@ -24,12 +24,14 @@
 // Delete all files in a directory except the most recent N ones
 void DeleteAllButMostRecent(std::string dir, int KeepFiles)
 {
-   struct Cmp{
-      bool operator() (const std::string& lhs, const std::string& rhs){
+   struct Cmp {
+      bool operator() (const std::string& lhs, const std::string& rhs) {
          struct stat buf_l, buf_r;
-         stat( lhs.c_str(), &buf_l);
-         stat( rhs.c_str(), &buf_r); //Get file stats                        
-         return buf_l.st_mtim.tv_nsec < buf_r.st_mtim.tv_nsec; //Compare last modification dates
+         stat(lhs.c_str(), &buf_l);
+         stat(rhs.c_str(), &buf_r);
+         if (buf_l.st_mtim.tv_sec == buf_r.st_mtim.tv_sec)
+            return buf_l.st_mtim.tv_nsec < buf_r.st_mtim.tv_nsec;
+         return buf_l.st_mtim.tv_sec < buf_r.st_mtim.tv_sec;
       }
    };
 
