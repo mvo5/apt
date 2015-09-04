@@ -23,9 +23,6 @@
 #include <apt-pkg/aptconfiguration.h>
 #include <apt-pkg/hashsum_template.h>
 
-#include <apt-pkg/configuration.h>
-#include <apt-pkg/hashes.h>
-
 #include <ctype.h>
 #include <vector>
 #include <sys/types.h>
@@ -248,9 +245,10 @@ bool MultiCompress::Finalize(unsigned long long &OutSize)
       // Force the file permissions
       if (St.st_mode != Permissions)
 	 chmod(I->Output.c_str(),Permissions);
+      
       OutSize += St.st_size;
    }
-
+   
    if (Changed == false)
       OutSize = 0;
    
