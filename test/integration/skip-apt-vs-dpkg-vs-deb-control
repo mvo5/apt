@@ -1,0 +1,135 @@
+#!/bin/sh
+set -e
+
+export DPKG='/home/david/Öffentlich/debian/dpkg/build-tree/src/dpkg'
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+setupenvironment
+configarchitecture 'amd64' 'i386'
+
+buildsimplenativepackage 'foo' 'amd64' '1' 'unstable' 'Conflicts: bar-prv:i386'
+buildsimplenativepackage 'foo2' 'amd64' '1' 'unstable' 'Depends: bar-prv:armel'
+buildsimplenativepackage 'bar' 'i386' '1' 'unstable' 'Provides: bar-prv:armel'
+
+buildsimplenativepackage 'foo3' 'amd64' '1' 'unstable' 'Depends: bar-prv2:any'
+buildsimplenativepackage 'bar2' 'i386' '1' 'unstable' 'Provides: bar-prv2:any'
+
+buildsimplenativepackage 'foo4' 'amd64' '1' 'unstable' 'Depends: bar-prv3:any'
+buildsimplenativepackage 'bar3' 'i386' '1' 'unstable' 'Provides: bar-prv3
+Multi-Arch: allowed'
+
+buildsimplenativepackage 'foo5' 'amd64' '1' 'unstable' 'Depends: bar-prv4'
+buildsimplenativepackage 'foo6' 'amd64' '1' 'unstable' 'Conflicts: bar-prv4'
+buildsimplenativepackage 'bar4' 'i386' '1' 'unstable' 'Provides: bar-prv4:amd64'
+
+buildsimplenativepackage 'aaa' 'amd64' '1' 'unstable' 'Conflicts: bbb'
+buildsimplenativepackage 'bbb' 'amd64' '1' 'unstable'
+
+
+setupaptarchive
+
+rundpkg() {
+	# Ideally, this should just be:
+	testsuccess dpkg --no-act "$@"
+	# but that segfaults with:
+	# Reading symbols from /home/david/Öffentlich/debian/dpkg/build-tree/src/dpkg...done.
+	# Starting program: /home/david/Öffentlich/debian/dpkg/build-tree/src/dpkg --root=/tmp/tmp.zloiKtjNDr/rootdir --log=/tmp/tmp.zloiKtjNDr/rootdir/var/log/dpkg.log --force-not-root --force-bad-path --no-act -i incoming/bar_1_i386.deb incoming/foo_1_amd64.deb
+	#
+	# Program received signal SIGSEGV, Segmentation fault.
+	# 0x000000000041a71d in pop_cleanup (flagset=flagset@entry=1) at ../../../lib/dpkg/ehandle.c:324
+	# 324       econtext->cleanups= cep->next;
+	# (gdb) bt
+	# #0  0x000000000041a71d in pop_cleanup (flagset=flagset@entry=1) at ../../../lib/dpkg/ehandle.c:324
+	# #1  0x0000000000424b78 in trigdef_process_done () at ../../../lib/dpkg/trigdeferred.l:248
+	# #2  0x0000000000423382 in trig_incorporate (cstatus=msdbrw_readonly) at ../../../lib/dpkg/triglib.c:816
+	# #3  0x0000000000418540 in modstatdb_open (readwritereq=<optimized out>) at ../../../lib/dpkg/dbmodify.c:296
+	# #4  0x0000000000405d96 in archivefiles (argv=0x7fffffffe020) at ../../src/archives.c:1435
+	# #5  0x0000000000402e79 in main (argc=<optimized out>, argv=0x7fffffffe020) at ../../src/main.c:899
+	#cp -a rootdir/var/lib/dpkg/ dpkg.bak
+	#testsuccess dpkg "$@"
+	#rm -rf rootdir/var/lib/dpkg/
+	#cp -a dpkg.bak rootdir/var/lib/dpkg
+}
+rundpkgfail() {
+	testfailure dpkg --no-act "$@"
+	#cp -a rootdir/var/lib/dpkg/ dpkg.bak
+	#testfailure dpkg "$@"
+	#rm -rf rootdir/var/lib/dpkg/
+	#cp -a dpkg.bak rootdir/var/lib/dpkg
+}
+
+msgmsg 'foo conflicts bar-prv:amd64, bar:i386 provides bar-prv:armel'
+testsuccessequal 'Reading package lists...
+Building dependency tree...
+The following NEW packages will be installed:
+  bar:i386 foo
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Inst bar:i386 (1 unstable [i386])
+Inst foo (1 unstable [amd64])
+Conf bar:i386 (1 unstable [i386])
+Conf foo (1 unstable [amd64])' aptget install foo bar:i386 -s
+rundpkg -i incoming/bar_1_i386.deb incoming/foo_1_amd64.deb
+
+msgmsg 'foo2 depends bar-prv:armel, bar:i386 provides bar-prv:armel'
+testsuccessequal 'Reading package lists...
+Building dependency tree...
+The following NEW packages will be installed:
+  bar:i386 foo2
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Inst bar:i386 (1 unstable [i386])
+Inst foo2 (1 unstable [amd64])
+Conf bar:i386 (1 unstable [i386])
+Conf foo2 (1 unstable [amd64])' aptget install foo2 bar:i386 -s
+rundpkg -i incoming/bar_1_i386.deb incoming/foo2_1_amd64.deb
+
+msgmsg 'foo3 depends bar-prv2:any, bar2:i386 provides bar-prv2:any'
+testsuccessequal 'Reading package lists...
+Building dependency tree...
+The following NEW packages will be installed:
+  bar2:i386 foo3
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Inst bar2:i386 (1 unstable [i386])
+Inst foo3 (1 unstable [amd64])
+Conf bar2:i386 (1 unstable [i386])
+Conf foo3 (1 unstable [amd64])' aptget install foo3 bar2:i386 -s
+rundpkg -i incoming/bar2_1_i386.deb incoming/foo3_1_amd64.deb
+
+msgmsg 'foo4 depends bar-prv3:any, M-A:allowed bar3:i386 provides bar-prv3'
+testsuccessequal 'Reading package lists...
+Building dependency tree...
+The following NEW packages will be installed:
+  bar3:i386 foo4
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Inst bar3:i386 (1 unstable [i386])
+Inst foo4 (1 unstable [amd64])
+Conf bar3:i386 (1 unstable [i386])
+Conf foo4 (1 unstable [amd64])' aptget install foo4 bar3:i386 -s
+rundpkg -i incoming/bar3_1_i386.deb incoming/foo4_1_amd64.deb
+
+msgmsg 'foo5 depends bar-prv4, bar4:i386 provides bar-prv4:amd64'
+testsuccessequal 'Reading package lists...
+Building dependency tree...
+The following NEW packages will be installed:
+  bar4:i386 foo5
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Inst bar4:i386 (1 unstable [i386])
+Inst foo5 (1 unstable [amd64])
+Conf bar4:i386 (1 unstable [i386])
+Conf foo5 (1 unstable [amd64])' aptget install foo5 bar4:i386 -s
+rundpkg -i incoming/bar4_1_i386.deb incoming/foo5_1_amd64.deb
+
+testfailureequal 'Reading package lists...
+Building dependency tree...
+Some packages could not be installed. This may mean that you have
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ foo6 : Conflicts: bar-prv4
+E: Unable to correct problems, you have held broken packages.' aptget install foo6 bar4:i386 -s
+rundpkgfail -i incoming/bar4_1_i386.deb incoming/foo6_1_amd64.deb
+
+rundpkgfail -i incoming/aaa_1_i386.deb incoming/bbb_1_amd64.deb

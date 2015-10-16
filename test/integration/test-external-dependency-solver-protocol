@@ -87,7 +87,7 @@ Reading state information...
 Execute external solver...
 The following package was automatically installed and is no longer required:
   stuff
-Use 'apt-get autoremove' to remove it.
+Use 'apt autoremove' to remove it.
 The following packages will be REMOVED:
   cool* somestuff*
 0 upgraded, 0 newly installed, 2 to remove and 0 not upgraded.

@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+TESTDIR=$(readlink -f $(dirname $0))
+. $TESTDIR/framework
+setupenvironment
+configarchitecture 'amd64'
+
+buildsimplenativepackage 'foo' 'amd64' '2' 'unstable' 'Provides: foo (= 1)'
+buildsimplenativepackage 'bar' 'amd64' '1' 'unstable' 'Depends: foo (= 1), foo (= 2)'
+buildsimplenativepackage 'baz' 'amd64' '1' 'unstable' 'Depends: foo (= 2)'
+
+setupaptarchive
+
+aptget install bar baz -s || true
+
+dpkg -i incoming/*.deb
+
+aptget check -s || true
+
+aptcache showpkg foo
+
+$SHELL
