@@ -1500,20 +1500,24 @@ void pkgDepCache::SetCandidateVersion(VerIterator TargetVer)
    to check if it needs to change the candidate of the dependency, too,
    to reach a installable versionstate */
 bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
-					std::string const &TargetRel)
+                                      std::string const &TargetRel)
 {
    std::list<std::pair<pkgCache::VerIterator, pkgCache::VerIterator> > Changed;
-   return SetCandidateRelease(TargetVer, TargetRel, Changed);
+   return SetCandidateRelease(TargetVer, TargetRel, Changed, 0);
 }
 bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
-					std::string const &TargetRel,
-					std::list<std::pair<pkgCache::VerIterator, pkgCache::VerIterator> > &Changed)
+                                      std::string const &TargetRel,
+                                      std::list<std::pair<pkgCache::VerIterator, pkgCache::VerIterator> > &Changed,
+                                      unsigned long Depth)
 {
    ActionGroup group(*this);
    SetCandidateVersion(TargetVer);
 
    if (TargetRel == "installed" || TargetRel == "candidate") // both doesn't make sense in this context
       return true;
+
+   if (DebugMarker)
+      std::clog << OutputInDepth(Depth) << "SetCandidateRelease " << TargetVer.ParentPkg().Name() << " " << TargetVer.VerStr() << std::endl;
 
    pkgVersionMatch Match(TargetRel, pkgVersionMatch::Release);
    // save the position of the last element we will not undo - if we have to
@@ -1537,7 +1541,11 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 	 // virtual packages can't be a solution
 	 if (P.end() == true || (P->ProvidesList == 0 && P->VersionList == 0))
 	    continue;
-	 pkgCache::VerIterator const Cand = PkgState[P->ID].CandidateVerIter(*this);
+
+         pkgCache::VerIterator const Cand = PkgState[P->ID].CandidateVerIter(*this);
+         if(DebugMarker)
+            std::clog << OutputInDepth(Depth) << "SetCandidateRelease candidate " << Cand.ParentPkg().Name() << " " << Cand.VerStr() << " " << Cand.end() << std::endl;
+
 	 // no versioned dependency - but is it installable?
 	 if (Start.TargetVer() == 0 || Start.TargetVer()[0] == '\0')
 	 {
@@ -1565,13 +1573,18 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 	 }
 	 if (Cand.end() == true)
 	    continue;
+
 	 // check if the current candidate is enough for the versioned dependency - and installable?
 	 if (Start.IsSatisfied(Cand) == true &&
 	     (VersionState(Cand.DependsList(), DepInstall, DepCandMin, DepCandPolicy) & DepCandMin) == DepCandMin)
 	 {
+            if (DebugMarker)
+               std::clog << OutputInDepth(Depth) << "SetCandidateRelease itsFine: " << Cand.ParentPkg().Name() << " : " << Cand.VerStr() << std::endl;
 	    itsFine = true;
 	    break;
 	 }
+         if (DebugMarker)
+            std::clog << OutputInDepth(Depth) << "SetCandidateRelease not good: " << Cand.ParentPkg().Name() << " : " << Cand.VerStr() << std::endl;
       }
 
       if (itsFine == true) {
@@ -1580,10 +1593,16 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 	 continue;
       }
 
+      if (DebugMarker)
+         std::clog << OutputInDepth(Depth) << "SetCandidateRelease or-group failed: " << D.TargetPkg().Name()<< std::endl;
+
       // walk again over the or-group and check each if a candidate switch would help
       itsFine = false;
       for (bool stillOr = true; stillOr == true; ++D)
       {
+         if (DebugMarker)
+            std::clog << OutputInDepth(Depth) << "SetCandidateRelease trying to change " << D.TargetPkg().Name() << std::endl;
+         
 	 stillOr = (D->CompareOp & Dep::Or) == Dep::Or;
 	 // changing candidate will not help if the dependency is not versioned
 	 if (D.TargetVer() == 0 || D.TargetVer()[0] == '\0')
@@ -1592,6 +1611,8 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 	       continue;
 	    break;
 	 }
+         if(DebugMarker)
+            std::clog << OutputInDepth(Depth) << "SetCandidateRelease inspecting " << D.TargetPkg().Name() << std::endl;
 
 	 pkgCache::VerIterator V;
 	 if (TargetRel == "newest")
@@ -1625,7 +1646,7 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 	 {
 	    // change the candidate
 	    Changed.push_back(make_pair(V, TargetVer));
-	    if (SetCandidateRelease(V, TargetRel, Changed) == false)
+	    if (SetCandidateRelease(V, TargetRel, Changed, Depth +1) == false)
 	    {
 	       if (stillOr == false)
 		  break;
@@ -1644,6 +1665,9 @@ bool pkgDepCache::SetCandidateRelease(pkgCache::VerIterator TargetVer,
 
       if (itsFine == false && (D->Type == pkgCache::Dep::PreDepends || D->Type == pkgCache::Dep::Depends))
       {
+         if(DebugMarker)
+            std::cerr << "SetCandidateRelease failed for " << TargetVer.ParentPkg().Name() << " " << TargetVer.VerStr() << std::endl;
+
 	 // undo all changes which aren't lead to a solution
 	 for (std::list<std::pair<pkgCache::VerIterator, pkgCache::VerIterator> >::const_iterator c = ++newChanged;
 	      c != Changed.end(); ++c)
