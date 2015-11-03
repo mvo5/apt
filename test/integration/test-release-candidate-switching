@@ -52,6 +52,15 @@ Recommends: amarok-utils (= 2.30.2-2+exp), phonon-backend-xine | phonon-backend,
 
 insertpackage 'experimental' 'uninstallablepkg' 'all' '1.0' 'Depends: libmtp8 (>= 10:0.20.1), amarok-utils (= 2.3.2-2+exp)'
 
+# 
+insertpackage 'experimental' 'lxd' 'all' '2.0' 'Depends: lxc (>= 2.0)'
+insertpackage 'experimental' 'lxc' 'all' '2.0' 'Depends: dnsmasq-base, liblxc (= 2.0)'
+insertpackage 'unstable' 'lxc' 'all' '1.0' 'Depends: dnsmasq-base, liblxc (= 1.0)'
+insertpackage 'experimental' 'liblxc' 'all' '2.0'
+insertpackage 'unstable' 'liblxc' 'all' '1.0'
+insertpackage 'stable' 'dnsmasq-base' 'all' '1.0' 'Depends: libnetfilter-conntrack3'
+insertpackage 'stable' 'libnetfilter-conntrack3' 'all' '1.0'
+
 setupaptarchive
 
 testfailureequal "Reading package lists...
@@ -417,3 +426,24 @@ The following packages have unmet dependencies:
  uninstallablepkg : Depends: libmtp8 (>= 10:0.20.1) but it is not going to be installed
                     Depends: amarok-utils (= 2.3.2-2+exp) but 2.3.1-1+sid is to be installed
 E: Unable to correct problems, you have held broken packages." aptget install uninstallablepkg/experimental --trivial-only -V -q=0
+
+# LP: #1512219
+testfailureequal "Reading package lists...
+Building dependency tree...
+Selected version '2.0' (experimental [all]) for 'lxd'
+Selected version '2.0' (experimental [all]) for 'lxc' because of 'lxd'
+Selected version '2.0' (experimental [all]) for 'liblxc' because of 'lxc'
+The following additional packages will be installed:
+   dnsmasq-base (1.0)
+   liblxc (2.0)
+   libnetfilter-conntrack3 (1.0)
+   lxc (2.0)
+The following NEW packages will be installed:
+   dnsmasq-base (1.0)
+   liblxc (2.0)
+   libnetfilter-conntrack3 (1.0)
+   lxc (2.0)
+   lxd (2.0)
+0 upgraded, 5 newly installed, 0 to remove and 0 not upgraded.
+After this operation, 215 kB of additional disk space will be used.
+E: Trivial Only specified but this is not a trivial operation." aptget install lxd/experimental --trivial-only -V -q=0 -o Debug::pkgDepCache::Marker=0
