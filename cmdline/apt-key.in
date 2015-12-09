@@ -16,6 +16,8 @@ eval $(apt-config shell REMOVED_KEYS APT::Key::RemovedKeys)
 ARCHIVE_KEYRING_URI='&keyring-uri;'
 eval $(apt-config shell ARCHIVE_KEYRING_URI APT::Key::ArchiveKeyringURI)
 
+DOWNLOAD_KEYRING_DIR=${APT_DIR}/var/lib/apt/keyrings
+
 aptkey_echo() { echo "$@"; }
 
 requires_root() {
@@ -39,99 +41,48 @@ get_fingerprints_of_keyring() {
     done | sort
 }
 
-add_keys_with_verify_against_master_keyring() {
-    ADD_KEYRING=$1
-    MASTER=$2
-
-    if [ ! -f "$ADD_KEYRING" ]; then
-	echo >&2 "ERROR: '$ADD_KEYRING' not found"
-	return
-    fi
-    if [ ! -f "$MASTER" ]; then
-	echo >&2 "ERROR: '$MASTER' not found"
-	return
-    fi
-
-    # when adding new keys, make sure that the archive-master-keyring
-    # is honored. so:
-    #   all keys that are exported must have a valid signature
-    #   from a key in the $distro-master-keyring
-    add_keys="$(get_fingerprints_of_keyring "$ADD_KEYRING")"
-    all_add_keys=`aptkey_execute "$GPG_SH" --keyring "$ADD_KEYRING" --with-colons --list-keys | grep ^[ps]ub | cut -d: -f5`
-    master_keys=`aptkey_execute "$GPG_SH" --keyring "$MASTER" --with-colons --list-keys | grep ^pub | cut -d: -f5`
-
-    # ensure there are no colisions LP: #857472
-    for all_add_key in $all_add_keys; do
-	for master_key in $master_keys; do
-            if [ "$all_add_key" = "$master_key" ]; then
-                echo >&2 "Keyid collision for '$all_add_key' detected, operation aborted"
-                return 1
-            fi
-        done
-    done
-
-    for add_key in $add_keys; do
-        # export the add keyring one-by-one
-	local TMP_KEYRING="${GPGHOMEDIR}/tmp-keyring.gpg"
-	aptkey_execute "$GPG_SH" --batch --yes --keyring "$ADD_KEYRING" --output "$TMP_KEYRING" --export "$add_key"
-	if ! aptkey_execute "$GPG_SH" --batch --yes --keyring "$TMP_KEYRING" --import "$MASTER" > "${GPGHOMEDIR}/gpgoutput.log" 2>&1; then
-	    cat >&2 "${GPGHOMEDIR}/gpgoutput.log"
-	    false
-	fi
-	# check if signed with the master key and only add in this case
-	ADDED=0
-	for master_key in $master_keys; do
-	    if aptkey_execute "$GPG_SH" --keyring "$TMP_KEYRING" --check-sigs --with-colons "$add_key" \
-	       | grep '^sig:!:' | cut -d: -f5 | grep -q "$master_key"; then
-		aptkey_execute "$GPG_SH" --batch --yes --keyring "$ADD_KEYRING" --export "$add_key" \
-		   | aptkey_execute "$GPG" --batch --yes --import
-		ADDED=1
-	    fi
-	done
-	if [ $ADDED = 0 ]; then
-	    echo >&2 "Key '$add_key' not added. It is not signed with a master key"
-	fi
-	rm -f "${TMP_KEYRING}"
-    done
-}
-
 # update the current archive signing keyring from a network URI
 # the archive-keyring keys needs to be signed with the master key
 # (otherwise it does not make sense from a security POV)
 net_update() {
-    # Disabled for now as code is insecure (LP: #1013639 (and 857472, 1013128))
-    APT_KEY_NET_UPDATE_ENABLED=""
-    eval $(apt-config shell APT_KEY_NET_UPDATE_ENABLED APT::Key::Net-Update-Enabled)
-    if [ -z "$APT_KEY_NET_UPDATE_ENABLED" ]; then
-        exit 1
-    fi
-
     if [ -z "$ARCHIVE_KEYRING_URI" ]; then
 	echo >&2 "ERROR: Your distribution is not supported in net-update as no uri for the archive-keyring is set"
 	exit 1
     fi
+    requires_root
     # in theory we would need to depend on wget for this, but this feature
     # isn't useable in debian anyway as we have no keyring uri nor a master key
     if ! which wget >/dev/null 2>&1; then
 	echo >&2 "ERROR: an installed wget is required for a network-based update"
 	exit 1
     fi
-    if [ ! -d "${APT_DIR}/var/lib/apt/keyrings" ]; then
-	mkdir -p "${APT_DIR}/var/lib/apt/keyrings"
+    if [ ! -d $DOWNLOAD_KEYRING_DIR ]; then
+	mkdir -p $DOWNLOAD_KEYRING_DIR
     fi
-    keyring="${APT_DIR}/var/lib/apt/keyrings/$(basename "$ARCHIVE_KEYRING_URI")"
+    keyring=$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING)
+    keyring_with_sig=$DOWNLOAD_KEYRING_DIR/$(basename $ARCHIVE_KEYRING_URI)
     old_mtime=0
     if [ -e $keyring ]; then
 	old_mtime=$(stat -c %Y $keyring)
     fi
-    (cd  "${APT_DIR}/var/lib/apt/keyrings"; wget --timeout=90 -q -N "$ARCHIVE_KEYRING_URI")
-    if [ ! -e "$keyring" ]; then
+    (cd  $DOWNLOAD_KEYRING_DIR; wget --timeout=90 -q -N $ARCHIVE_KEYRING_URI)
+    if [ ! -e $keyring_with_sig ]; then
 	return
     fi
-    new_mtime=$(stat -c %Y "$keyring")
+
+    # verify downloaded keyring against the master_keyring
+    if ! aptkey_execute $GPG_SH --keyring $MASTER_KEYRING --output ${keyring}.tmp --decrypt $keyring_with_sig; then
+        echo "Failed to verify downloaded keyring"
+        rm -f $keyring_with_sig ${keyring}.tmp
+        exit 1
+    else
+        mv ${keyring}.tmp $keyring
+    fi
+
+    new_mtime=$(stat -c %Y $keyring)
     if [ $new_mtime -ne $old_mtime ]; then
-	aptkey_echo "Checking for new archive signing keys now"
-	add_keys_with_verify_against_master_keyring "$keyring" "$MASTER_KEYRING"
+	echo "Checking for new archive signing keys now"
+        import_keyring_into_keyring "$keyring" '' && cat "${GPGHOMEDIR}/gpgoutput.log"
     fi
 }
 
